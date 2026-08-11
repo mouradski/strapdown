@@ -190,9 +190,9 @@ export function tercomPrinciple({ labels: L }) {
   return svg(`
     ${/* etage 1 : ou l'on est, ou l'on croit etre, et le faisceau radar */ ''}
     ${dot(xMatch, 40, { r: 4, cls: 'fig-truth-fill' })}
-    ${text(xMatch + 9, 36, esc(L.truePos), { cls: 'fig-truth', size: 10 })}
+    ${text(xMatch + 9, 36, esc(L.truth), { cls: 'fig-truth', size: 10 })}
     ${dot(xBelieved, 64, { r: 4, cls: 'fig-est-fill' })}
-    ${text(xBelieved - 9, 68, esc(L.believedPos), { anchor: 'end', cls: 'fig-est', size: 10 })}
+    ${text(xBelieved - 9, 68, esc(L.believed), { anchor: 'end', cls: 'fig-est', size: 10 })}
     ${arrow(xMatch, 48, xMatch, 112, { cls: 'fig-truth', dash: '3 3' })}
     ${text(xMatch + 9, 92, esc(L.radar), { cls: 'fig-truth', size: 10 })}
 
@@ -216,7 +216,7 @@ export function tercomPrinciple({ labels: L }) {
     ${text(xMatch + 9, yTop + hBox + 4, esc(L.minimum), { cls: 'fig-danger', size: 10 })}
     ${legend(252, 202, [
     { cls: 'fig-est', dash: '4 3', label: L.filed },
-    { cls: 'fig-truth', label: L.matched },
+    { cls: 'fig-truth', label: L.measured },
     { cls: 'fig-danger', label: L.offset },
   ])}
   `, { h: 250 });
@@ -308,7 +308,7 @@ export function profileNoise({ labels: L, sensors }) {
       ${dots.join('')}
       ${text(p.x, 32, esc(L[p.key]), { cls: 'fig-dim', size: 10.5 })}
       ${text(p.x, 48, `${esc(L.reliefSd)} ± ${fmt(p.sd, 1)} m`, { cls: 'fig-truth', size: 10 })}
-      ${text(p.x, 190, `${esc(L.ratio)} ${fmt(p.sd / sigma, 1)}`, {
+      ${text(p.x, 190, `${esc(L.ratio)} ${fmt(p.sd / sigma, p.sd / sigma < 1 ? 2 : 1)}`, {
       cls: p.sd > 2 * sigma ? 'fig-truth' : 'fig-danger', size: 10.5,
     })}`;
   };

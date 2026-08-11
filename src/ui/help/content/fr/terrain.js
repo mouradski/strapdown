@@ -4,19 +4,19 @@ export default {
     title: 'Corrélation de terrain',
     caption: 'Le décalage qui fait coïncider les deux profils est l\'erreur de navigation elle-même.',
     labels: {
-      truePos: 'position vraie',
-      believedPos: 'position crue',
+      truth: 'position vraie',
+      believed: 'position crue',
       radar: 'radioaltimètre',
       map: 'carte embarquée',
       filed: 'rangé là où il se croit',
-      matched: 'glissé jusqu\'à coïncider',
+      measured: 'glissé jusqu\'à coïncider',
       offset: 'décalage trouvé = erreur de navigation',
       ssd: 'Σ (écarts)²',
       minimum: 'minimum',
     },
     body: `<p>Le radioaltimètre relève la hauteur du sol sous le véhicule, un point tous les 120 m de route — espacés en <em>distance</em> et non en temps, de sorte que le profil ne rétrécit pas quand l'engin va plus vite. Cinquante points forment une bande de relief de 6 km. Le calculateur range chaque mesure en face de la position qu'il <em>croit</em> occuper, puis fait glisser la bande entière sur sa carte embarquée jusqu'à rendre minimale la somme des carrés des écarts. Le décalage qui réalise la coïncidence est exactement l'écart entre ce qu'il croit et ce qui est.</p>
       <p><b>C'est le seul capteur du bord qui rende une position.</b> Le viseur stellaire mesure une attitude, l'altimètre rend un seul nombre ; celui-ci rend un est et un nord. Un détail le rend robuste : les deux profils sont centrés sur leur moyenne avant comparaison, si bien qu'une erreur d'altitude constante — le calculateur qui se trompe sur sa propre hauteur — disparaît entièrement. Seul le décalage horizontal subsiste.</p>
-      <p><b>La précision n'est pas un réglage.</b> L'incertitude annoncée avec chaque recalage se déduit de la courbure du minimum, puis se trouve gonflée selon la netteté avec laquelle le meilleur décalage se détache de tous les autres — le <em>contraste</em>. Sur un relief marqué le minimum est franc et le contraste approche 0,9. Sur une plaine tous les décalages se valent à peu près, le minimum s'aplatit, et le chiffre annoncé enfle jusqu'à ce que le recalage soit écarté. Au-dessus de la mer le profil est rigoureusement plat, la courbure est nulle, et le module ne répond rien.</p>
+      <p><b>La précision n'est pas un réglage.</b> L'incertitude annoncée avec chaque recalage se déduit de la courbure du minimum, puis se trouve gonflée selon la netteté avec laquelle le meilleur décalage se détache de tous les autres — le <em>contraste</em>. Sur un relief marqué le minimum est franc et le contraste se tient entre 0,6 et 0,9. Sur une plaine tous les décalages se valent à peu près, le minimum s'aplatit, et le chiffre annoncé enfle jusqu'à ce que le recalage soit écarté. Au-dessus de la mer le profil est rigoureusement plat, la courbure est nulle, et le module ne répond rien.</p>
       <p>L'ordre de grandeur mérite d'être retenu : sur 6 km de plaine, le sol monte et descend d'environ <b>2 m d'écart-type</b> — moins que l'erreur de la carte embarquée. Il n'y a tout simplement rien à reconnaître.</p>`,
   },
 
@@ -66,18 +66,22 @@ export default {
       caption: 'Allongez le profil et les faux minima remontent. Un seul subsiste.',
     },
     body: `<p>Le nombre de points conservés dans le profil glissant — 50 par défaut, espacés de 120 m, soit 6,0 km de route. Le curseur va de 10 à 120 points, c'est-à-dire de 1,2 km à 14,4 km.</p>
-      <p><b>C'est là que loge l'ambiguïté.</b> Un kilomètre de relief ressemble à beaucoup d'autres kilomètres, et la corrélation présente alors plusieurs minima de profondeur comparable sans que rien ne désigne le bon. La figure les calcule : à huit points, trois minima candidats, et le plus creux n'est pas le décalage vrai ; passé la vingtaine, les faux sont remontés et un seul minimum demeure. Allonger le profil affine moins la réponse qu'il n'élimine les concurrents.</p>
+      <p><b>C'est là que loge l'ambiguïté.</b> Un kilomètre de relief ressemble à beaucoup d'autres kilomètres, et la corrélation présente alors plusieurs minima de profondeur pratiquement égale sans que rien ne désigne le bon. La figure les calcule, et déplacer le curseur parcourt toute l'histoire : à huit points, trois candidats ; à vingt, encore deux ; à partir de quarante, un seul minimum subsiste. Allonger le profil affine moins la réponse qu'il n'élimine les concurrents.</p>
       <p>Mesurée sur un vol de planeur, l'incertitude annoncée suit directement : <b>15 points → environ 475 m, 50 points → 250 m, 100 points → 125 m</b>. Le prix à payer est l'attente — rien n'est rendu tant que la mémoire n'est pas pleine, le premier recalage attend donc n × 120 m de route, et un long profil répond pour la moyenne des positions qu'il couvre plutôt que pour celle de l'instant. Une manœuvre pendant l'accumulation, en revanche, ne coûte rien : chaque point garde ses propres coordonnées et l'ensemble est translaté en bloc.</p>`,
   },
 
   'terrain.period': {
     title: 'Intervalle entre recalages',
     caption: 'Entre deux recalages, rien n\'empêche la dérive inertielle de reprendre.',
+    // Le schéma fixCadence appartient au groupe « viseur stellaire » : ces
+    // clés sont celles qu'il lit.
     labels: {
       time: 'temps',
       error: 'erreur de position',
-      fix: 'recalage',
-      period: 'intervalle',
+      slow: 'intervalle long',
+      fast: 'intervalle court',
+      floor: 'plancher : l\'incertitude du recalage',
+      age: 'âge du dernier recalage',
       caption: 'Chaque recalage rabat la dérive ; entre eux, elle repart.',
     },
     body: `<p>Le temps que le module attend avant de tenter une nouvelle corrélation — 6 s par défaut, réglable de 1 s à 60 s. Entre deux recalages la dérive inertielle reprend : l'intervalle fixe donc la hauteur à laquelle elle est rabattue.</p>

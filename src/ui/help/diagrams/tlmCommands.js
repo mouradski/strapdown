@@ -110,12 +110,9 @@ export function thrustTimeline({ labels: L, veh }) {
     [px(total), pyF(0)]], { cls: 'fig-dim', dash: '3 3' })}
     ${band([[px(tCut), yB0], [px(tCut), pyP(LEFT)], [px(total), pyP(LEFT)], [px(total), yB0]],
     { cls: 'fig-band-danger' })}
+    ${line(x0, pyP(LEFT), px(total) + 6, pyP(LEFT), { cls: 'fig-danger', dash: '3 4' })}
     ${polyline(propPts, { cls: 'fig-truth' })}
-    ${polyline([[px(tCut), pyP(LEFT)], [px(total), pyP(LEFT)], [px(total), pyP(0)]],
-    { cls: 'fig-danger', dash: '3 3' })}
-    ${line(px(total) + 8, pyP(LEFT), px(total) + 8, yB0, { cls: 'fig-danger' })}
-    ${line(px(total) + 4, pyP(LEFT), px(total) + 12, pyP(LEFT), { cls: 'fig-danger' })}
-    ${line(px(total) + 4, yB0, px(total) + 12, yB0, { cls: 'fig-danger' })}
+    ${polyline([[px(tCut), pyP(LEFT)], [px(total), pyP(0)]], { cls: 'fig-danger', dash: '3 3' })}
     ${axes(x0, yB0, x1 + 14, yB1 - 8, { xLabel: L.time })}
     ${line(px(tCut), yA1 - 8, px(tCut), yB0 + 4, { cls: 'fig-danger' })}
     ${dot(px(tCut), pyF(0), { r: 3, cls: 'fig-danger-fill' })}
@@ -139,8 +136,11 @@ export function thrustTimeline({ labels: L, veh }) {
  * une grandeur scalaire et MONOTONE : la portee du point d'impact predit.
  */
 export function cutoffDecision({ labels: L }) {
-  const bx = { x0: 60, x1: 384, yTop: 44, yBot: 162 };
-  const xr = 442; // fin du prolongement fantome
+  // Le cadre s'arrete tot : tout ce qui est a droite du trait d'extinction sert
+  // au prolongement fantome et a son libelle, qui ne doivent pas chevaucher le
+  // trait rouge.
+  const bx = { x0: 44, x1: 330, yTop: 44, yBot: 162 };
+  const xr = 396; // fin du prolongement fantome
   const px = (u) => bx.x0 + u * (bx.x1 - bx.x0);
 
   // Erreur de portee : negative, croissante, et de plus en plus vite — la
@@ -170,15 +170,17 @@ export function cutoffDecision({ labels: L }) {
     ${line(bx.x1, bx.yTop - 12, bx.x1, bx.yBot + 8, { cls: 'fig-danger' })}
     ${dot(bx.x1, bx.yTop, { r: 3.5, cls: 'fig-danger-fill' })}
     ${text(bx.x1 - 6, bx.yTop - 18, esc(L.cutoff), { anchor: 'end', cls: 'fig-danger', size: 10.5 })}
-    ${text(xr + 4, bx.yBot - 40, esc(L.rise), { anchor: 'end', cls: 'fig-est', size: 9.5 })}
-    ${legend(bx.x0, bx.yBot + 34, [
+    ${text(bx.x1 + 6, bx.yBot - 56, esc(L.rise), { cls: 'fig-est', size: 9.5 })}
+    ${/* une note par ligne : en anglais, la legende et la cadence mises cote a
+        cote depassent ensemble la largeur du cadre */ ''}
+    ${legend(bx.x0, bx.yBot + 24, [
     { cls: 'fig-cmd', label: L.rangeErr },
     { cls: 'fig-est', label: L.vGo },
   ])}
-    ${text(xr + 10, bx.yBot + 38, esc(L.cadence), { anchor: 'end', cls: 'fig-dim', size: 9.5 })}
-    ${text(xr + 10, bx.yBot + 53, `${esc(L.sensitivity)} ${(dRdV).toFixed(0)} m`, { anchor: 'end', cls: 'fig-dim', size: 9.5 })}
-    ${text(bx.x0, 228, esc(L.caption), { cls: 'fig-dim', size: 10 })}
-  `, { h: 238 });
+    ${text(bx.x0, bx.yBot + 54, esc(L.cadence), { cls: 'fig-dim', size: 9.5 })}
+    ${text(bx.x0, bx.yBot + 68, `${esc(L.sensitivity)} ${(dRdV).toFixed(0)} m`, { cls: 'fig-dim', size: 9.5 })}
+    ${text(bx.x0, 246, esc(L.caption), { cls: 'fig-dim', size: 10 })}
+  `, { h: 254 });
 }
 
 /**
@@ -261,7 +263,8 @@ export function attitudeChain({ labels: L }) {
     ${line(xL, yBar, 420, yBar, { cls: 'fig-dim' })}
     ${arrow(xR, yBar, xR, yOut - 2, { cls: 'fig-truth' })}
     ${arrow(xL, yBar, xL, yOut - 2, { cls: 'fig-danger' })}
-    ${text(xR + 6, yBar + 20, esc(L.ifForce), { cls: 'fig-truth', size: 9.5 })}
+    ${/* cale a droite : la branche « avec force » porte le libelle le plus long */ ''}
+    ${text(474, yBar + 20, esc(L.ifForce), { anchor: 'end', cls: 'fig-truth', size: 9.5 })}
     ${text(xL - 6, yBar + 20, esc(L.ifNone), { anchor: 'end', cls: 'fig-danger', size: 9.5 })}
     ${rect(252, yOut, 176, oh, { cls: 'fig-box fig-truth-box', rx: 6 })}
     ${text(340, yOut + 19, esc(L.force), { anchor: 'middle', cls: 'fig-truth', size: 10.5 })}
@@ -322,7 +325,8 @@ export function windFrame({ labels: L, veh }) {
     ${text(fp[0] + 5, fp[1] - 58, esc(L.lift), { cls: 'fig-truth', size: 10 })}
     ${arrow(fp[0], fp[1], fp[0] - 56, fp[1], { cls: 'fig-truth', dash: '4 3' })}
     ${text(fp[0] - 60, fp[1] - 5, esc(L.drag), { anchor: 'end', cls: 'fig-truth', size: 10 })}
-    ${text(ax, 190, esc(L.perp), { cls: 'fig-dim', size: 9.5 })}
+    ${/* ligne pleine largeur : la phrase court sous les deux panneaux */ ''}
+    ${text(ax, 206, esc(L.perp), { cls: 'fig-dim', size: 9.5 })}
 
     ${axes(bx.x, bx.y + bx.h, bx.x + bx.w + 18, bx.y - 10, { xLabel: L.aoaAxis, yLabel: L.finesse })}
     ${polyline(pts, { cls: 'fig-cmd' })}
@@ -394,7 +398,7 @@ export function bankLift({ labels: L, veh }) {
     ${line(bx.x, pyR(rOf(muEq)), pxB(muEq), pyR(rOf(muEq)), { cls: 'fig-est', dash: '4 3' })}
     ${line(pxB(muEq), pyR(rOf(muEq)), pxB(muEq), bx.y + bx.h, { cls: 'fig-est', dash: '4 3' })}
     ${dot(pxB(muEq), pyR(rOf(muEq)), { r: 3, cls: 'fig-est-fill' })}
-    ${text(bx.x + 6, bx.y + bx.h - 10, `${esc(L.aoaOnly)} ${(muEq * RAD).toFixed(0)}°`, { cls: 'fig-est', size: 9.5 })}
+    ${text(pxB(muEq) - 6, pyR(rOf(muEq)) - 7, `${esc(L.aoaOnly)} ${(muEq * RAD).toFixed(0)}°`, { anchor: 'end', cls: 'fig-est', size: 9.5 })}
     ${dot(pxB(maxBank), pyR(rOf(maxBank)), { r: 3.5, cls: 'fig-danger-fill' })}
     ${text(bx.x + bx.w + 16, pyR(rOf(maxBank)) + 16, `${esc(L.maxBank)} ${(maxBank * RAD).toFixed(0)}°`, { anchor: 'end', cls: 'fig-danger', size: 9.5 })}
     ${text(bx.x, bx.y + bx.h + 32, `${(r0 / 1000).toFixed(0)} → ${(rOf(maxBank) / 1000).toFixed(0)} km`, { cls: 'fig-danger', size: 10 })}
@@ -449,7 +453,7 @@ export function velocityToGain({ labels: L }) {
     ${dot(oE[0], oE[1], { r: 4, cls: 'fig-est-fill' })}
     ${arrow(oT[0], oT[1], tTrue[0], tTrue[1], { cls: 'fig-truth', dash: '4 3' })}
     ${dot(oT[0], oT[1], { r: 4, cls: 'fig-truth-fill' })}
-    ${text(tTrue[0] + 8, tTrue[1] + 14, esc(L.trueReq), { cls: 'fig-truth', size: 9.5 })}
+    ${text(452, tTrue[1] + 14, esc(L.trueReq), { anchor: 'end', cls: 'fig-truth', size: 9.5 })}
     ${dot(34, 186, { r: 4, cls: 'fig-est-fill' })}
     ${text(46, 190, esc(L.posEst), { cls: 'fig-est', size: 10 })}
     ${dot(34, 206, { r: 4, cls: 'fig-truth-fill' })}
@@ -498,9 +502,9 @@ export function rangeSensitivity({ labels: L }) {
     ${line(cxT - 7, cyT + 7, cxT + 7, cyT - 7, { cls: 'fig-danger' })}
     ${text(cxT, zy + 16, esc(L.target), { anchor: 'middle', cls: 'fig-danger', size: 9.5 })}
     ${dot(xDv, cyT, { r: 3.5, cls: 'fig-danger-fill' })}
-    ${text(xDv + 6, cyT + 4, esc(L.dvShift), { cls: 'fig-danger', size: 9.5 })}
+    ${text(xDv + 6, cyT + 14, esc(L.dvShift), { cls: 'fig-danger', size: 9.5 })}
     ${dot(xNav, cyT, { r: 3.5, cls: 'fig-est-fill' })}
-    ${text(xNav - 6, cyT + 4, esc(L.navShift), { anchor: 'end', cls: 'fig-est', size: 9.5 })}
+    ${text(xNav - 6, cyT - 8, esc(L.navShift), { anchor: 'end', cls: 'fig-est', size: 9.5 })}
     ${line(zx + 16, zy + zh - 10, zx + 16 + 1000 * S, zy + zh - 10, { cls: 'fig-dim' })}
     ${line(zx + 16, zy + zh - 13, zx + 16, zy + zh - 7, { cls: 'fig-dim' })}
     ${line(zx + 16 + 1000 * S, zy + zh - 13, zx + 16 + 1000 * S, zy + zh - 7, { cls: 'fig-dim' })}
@@ -520,9 +524,9 @@ export function rangeSensitivity({ labels: L }) {
  * laisserait passer.
  */
 export function aimOffset({ labels: L }) {
-  const route = 84;
+  const route = 106;
   const xT = 300, xP = 232;
-  const aim = [368, 51];
+  const aim = [368, 73];
   const S = 38 / 1000; // 38 px = 1 km
 
   return svg(`
@@ -541,12 +545,12 @@ export function aimOffset({ labels: L }) {
     ${line(xT, route, aim[0], route, { cls: 'fig-dim', dash: '2 3' })}
     ${line(aim[0], route, aim[0], aim[1], { cls: 'fig-dim', dash: '2 3' })}
     ${text((xT + aim[0]) / 2, route + 14, esc(L.downrange), { anchor: 'middle', cls: 'fig-dim', size: 9.5 })}
-    ${text(aim[0] - 6, (route + aim[1]) / 2, esc(L.crossTrack), { anchor: 'end', cls: 'fig-dim', size: 9.5 })}
-    ${line(30, 148, 30 + 1000 * S, 148, { cls: 'fig-dim' })}
-    ${line(30, 145, 30, 151, { cls: 'fig-dim' })}
-    ${line(30 + 1000 * S, 145, 30 + 1000 * S, 151, { cls: 'fig-dim' })}
-    ${text(34 + 1000 * S, 151, '1 km', { cls: 'fig-dim', size: 9 })}
-    ${text(24, 180, esc(L.why), { cls: 'fig-dim', size: 10 })}
+    ${text(aim[0] + 6, route - 8, esc(L.crossTrack), { cls: 'fig-dim', size: 9.5 })}
+    ${line(30, 170, 30 + 1000 * S, 170, { cls: 'fig-dim' })}
+    ${line(30, 167, 30, 173, { cls: 'fig-dim' })}
+    ${line(30 + 1000 * S, 167, 30 + 1000 * S, 173, { cls: 'fig-dim' })}
+    ${text(34 + 1000 * S, 173, '1 km', { cls: 'fig-dim', size: 9 })}
+    ${text(24, 28, esc(L.why), { cls: 'fig-dim', size: 10 })}
     ${text(24, 202, esc(L.gain), { cls: 'fig-cmd', size: 10 })}
     ${text(24, 226, esc(L.caption), { cls: 'fig-dim', size: 10 })}
   `, { h: 236 });

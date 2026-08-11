@@ -16,16 +16,41 @@ import { getLocale, t } from '../i18n.js';
 
 const CATALOGUES = { en: EN, fr: FR };
 
+// Un meme schema sert souvent plusieurs fiches : la cadence de recalage
+// illustre aussi bien le reglage du viseur stellaire que la ligne « derniere
+// mesure » de la telemetrie. Les libelles qu'il dessine appartiennent alors au
+// SCHEMA, pas a la fiche — et exiger que chaque fiche les redeclare revient a
+// recopier le meme texte a plusieurs endroits, avec la derive que cela promet.
+//
+// On rassemble donc, pour chaque schema, les libelles de toutes les fiches qui
+// s'en servent. Une fiche garde la priorite sur les siens : elle peut nuancer
+// une annotation sans priver les autres des leurs.
+function sharedLabels(catalogue, diagram, exceptId) {
+  const merged = {};
+  for (const [id, def] of Object.entries(TOPICS)) {
+    if (id === exceptId || def.diagram !== diagram) continue;
+    Object.assign(merged, catalogue[id]?.labels ?? {});
+  }
+  return merged;
+}
+
 /** Contenu d'une fiche, avec repli sur l'anglais champ par champ. */
 export function topicContent(id) {
   const local = CATALOGUES[getLocale()]?.[id];
   const ref = EN[id];
   if (!local && !ref) return null;
+  const diagram = TOPICS[id]?.diagram;
+  const localCat = CATALOGUES[getLocale()] ?? EN;
   return {
     title: local?.title ?? ref?.title ?? id,
     body: local?.body ?? ref?.body ?? '',
     caption: local?.caption ?? ref?.caption ?? '',
-    labels: { ...(ref?.labels ?? {}), ...(local?.labels ?? {}) },
+    labels: {
+      ...(diagram ? sharedLabels(EN, diagram, id) : {}),
+      ...(diagram ? sharedLabels(localCat, diagram, id) : {}),
+      ...(ref?.labels ?? {}),
+      ...(local?.labels ?? {}),
+    },
   };
 }
 

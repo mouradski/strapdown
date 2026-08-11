@@ -7,19 +7,19 @@ export default {
     title: 'Terrain correlation',
     caption: 'The shift that makes the two profiles coincide is the navigation error itself.',
     labels: {
-      truePos: 'true position',
-      believedPos: 'believed position',
+      truth: 'true position',
+      believed: 'believed position',
       radar: 'radar altimeter',
       map: 'onboard map',
       filed: 'filed where it believes it is',
-      matched: 'slid until it matches',
+      measured: 'slid until it matches',
       offset: 'offset found = navigation error',
       ssd: 'Σ (differences)²',
       minimum: 'minimum',
     },
     body: `<p>The radar altimeter reads the height of the ground below, one sample every 120 m of track — spaced by <em>distance</em> and not by time, so the profile does not shrink when the vehicle flies faster. Fifty of them make a 6 km strip of relief. The computer files each sample against the position it <em>believes</em> it occupies, then slides the whole strip across its onboard map until the sum of squared differences is smallest. The shift that achieves the match is precisely the gap between belief and truth.</p>
       <p><b>It is the only sensor here that returns a position.</b> The star tracker measures attitude, the altimeter returns a single number; this one returns east and north. One detail makes it robust: both profiles are mean-centred before comparison, so a constant altitude error — the computer wrong about its own height — cancels out completely. Only the horizontal shift survives.</p>
-      <p><b>Accuracy is not a setting.</b> The uncertainty announced with each fix is computed from the curvature of that minimum, then inflated by how far the best offset stands out from all the others — the <em>contrast</em>. Over rugged ground the minimum is sharp and the contrast approaches 0.9. Over a plain every offset fits about as well, the minimum flattens, and the announced figure grows until the fix is discarded. Over the sea the profile is exactly flat, the curvature is zero, and the module returns nothing at all.</p>
+      <p><b>Accuracy is not a setting.</b> The uncertainty announced with each fix is computed from the curvature of that minimum, then inflated by how far the best offset stands out from all the others — the <em>contrast</em>. Over rugged ground the minimum is sharp and the contrast runs from 0.6 to 0.9. Over a plain every offset fits about as well, the minimum flattens, and the announced figure grows until the fix is discarded. Over the sea the profile is exactly flat, the curvature is zero, and the module returns nothing at all.</p>
       <p>The scale of the thing is worth holding on to: along 6 km of plain the ground rises and falls by some <b>2 m rms</b> — less than the error of the onboard map. There is simply nothing there to recognise.</p>`,
   },
 
@@ -69,18 +69,22 @@ export default {
       caption: 'Lengthen the profile and the false minima rise. One survives.',
     },
     body: `<p>The number of points held in the rolling profile — 50 by default, spaced 120 m apart, so 6.0 km of track. The slider runs from 10 to 120 points, that is from 1.2 km to 14.4 km.</p>
-      <p><b>This is where ambiguity lives.</b> One kilometre of relief resembles a great many other kilometres, and the correlation then shows several minima of comparable depth with nothing to designate the right one. The figure computes them: eight points give three candidate minima and the deepest is not the true offset; past about twenty the false ones have risen and a single minimum remains. Lengthening the profile does not sharpen the answer so much as it removes the competitors.</p>
+      <p><b>This is where ambiguity lives.</b> One kilometre of relief resembles a great many other kilometres, and the correlation then shows several minima of practically equal depth with nothing to designate the right one. The figure computes them, and moving the slider walks through the whole story: eight points leave three candidates, twenty still leave two, and from forty on a single minimum survives. Lengthening the profile does not sharpen the answer so much as it removes the competitors.</p>
       <p>Measured across a glider flight, the uncertainty the module announces follows directly: <b>15 points → about 475 m, 50 points → 250 m, 100 points → 125 m</b>. The price is patience — nothing is returned until the buffer is full, so the first fix waits for n × 120 m of track, and a long profile answers for the average of the positions it spans rather than for the present one. A turn during accumulation costs nothing, however: each point keeps its own coordinates and the whole set is translated rigidly.</p>`,
   },
 
   'terrain.period': {
     title: 'Interval between fixes',
     caption: 'Between two fixes nothing stops the inertial drift from resuming.',
+    // Le schema fixCadence appartient au groupe « viseur stellaire » : ces
+    // cles sont celles qu'il lit.
     labels: {
       time: 'time',
       error: 'position error',
-      fix: 'fix',
-      period: 'interval',
+      slow: 'long interval',
+      fast: 'short interval',
+      floor: 'floor: the fix\'s own uncertainty',
+      age: 'age of the last fix',
       caption: 'Each fix caps the drift; between them it grows again.',
     },
     body: `<p>How long the module waits before attempting another correlation — 6 s by default, adjustable from 1 s to 60 s. Between two fixes the inertial drift resumes, so the interval sets how tightly it is capped.</p>

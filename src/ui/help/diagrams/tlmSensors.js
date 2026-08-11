@@ -64,7 +64,7 @@ function seg(f, u0, u1, xOf, yOf, n = 36) {
  * le vehicule tombe — c'est le seul endroit du bus ou une valeur nulle veut
  * dire quelque chose de fort.
  */
-export function specificForce({ labels: L, veh }) {
+export function specificForce({ labels: L = {}, veh }) {
   const v = veh ?? VEH0;
   const liftG = (v.stages?.[0]?.thrustSL ?? 640e3) / (liftoffMass(v) * G0);
   const peakG = 3.6 * liftG; // rapport constate entre l'extinction et le decollage
@@ -142,7 +142,7 @@ export function specificForce({ labels: L, veh }) {
  * du gyrometre — et ses trois contributions se calculent avec les reglages
  * courants.
  */
-export function bodyRates({ labels: L, sensors }) {
+export function bodyRates({ labels: L = {}, sensors }) {
   const imu = sensors?.imu ?? {};
   const bias = (imu.gyroBias ?? 0.01) / 3600; // °/h -> °/s
   const rate = 0.17; // vitesse de tangage representative pendant la montee [°/s]
@@ -189,7 +189,7 @@ export function bodyRates({ labels: L, sensors }) {
  * biais accelerometrique. Et ce qui entre dans cet etat n'est pas seulement le
  * biais : le facteur d'echelle, absent du modele, s'y refugie.
  */
-export function biasEstimation({ labels: L, sensors, veh }) {
+export function biasEstimation({ labels: L = {}, sensors, veh }) {
   const imu = sensors?.imu ?? {};
   const v = veh ?? VEH0;
   const accelBias = imu.accelBias ?? 25; // [µg]
@@ -257,7 +257,7 @@ export function biasEstimation({ labels: L, sensors, veh }) {
  * le bord ne peut pas comparer les deux — et qu'il lui arrive donc d'etre sur
  * de lui a tort.
  */
-export function sigmaEnvelope({ labels: L, sensors }) {
+export function sigmaEnvelope({ labels: L = {}, sensors }) {
   const box = { x: 52, y: 24, w: 372, h: 124 };
   const base = box.y + box.h;
   const xOf = (u) => box.x + box.w * u;
@@ -306,8 +306,8 @@ export function sigmaEnvelope({ labels: L, sensors }) {
     ${polyline(envPts, { cls: 'fig-est' })}
     ${polyline(path(tru), { cls: 'fig-truth' })}
     ${axes(box.x, base, box.x + box.w + 16, box.y - 8, { xLabel: L.time, yLabel: L.error })}
-    ${iDrop ? `${arrow(xOf(iDrop / N) - 34, yOf(sig[iDrop]) - 36, xOf(iDrop / N) - 3, yOf(sig[iDrop]) - 8, { cls: 'fig-dim' })}
-      ${text(xOf(iDrop / N) - 36, yOf(sig[iDrop]) - 40, esc(L.fix ?? ''), { anchor: 'end', cls: 'fig-dim', size: 9.5 })}` : ''}
+    ${iDrop ? `${arrow(xOf(iDrop / N) - 46, yOf(sig[iDrop]) - 36, xOf(iDrop / N) - 4, yOf(sig[iDrop]) - 8, { cls: 'fig-dim' })}
+      ${text(xOf(iDrop / N) - 52, yOf(sig[iDrop]) - 42, esc(L.fix ?? ''), { cls: 'fig-dim', size: 9.5 })}` : ''}
     ${line(box.x, base + 32, box.x + 16, base + 32, { cls: 'fig-est' })}
     ${text(box.x + 22, base + 35, esc(L.announced ?? ''), { cls: 'fig-est', size: 10 })}
     ${line(box.x, base + 50, box.x + 16, base + 50, { cls: 'fig-truth' })}
@@ -325,7 +325,7 @@ export function sigmaEnvelope({ labels: L, sensors }) {
  * a lui seul du nombre de recalages d'attitude — et c'est pour cela qu'un
  * planeur en obtient deux fois moins qu'un vecteur balistique de meme duree.
  */
-export function starTally({ labels: L, sensors, veh }) {
+export function starTally({ labels: L = {}, sensors, veh }) {
   const v = veh ?? VEH0;
   const period = sensors?.starTracker?.period ?? 20;
   const minAlt = sensors?.starTracker?.minAlt ?? 45000;
@@ -383,7 +383,7 @@ export function starTally({ labels: L, sensors, veh }) {
     ${missed.map(([x, y]) => line(x, y - 3, x, y + 3, { cls: 'fig-dim' })).join('')}
     ${taken.map(([x, y]) => dot(x, y, { r: 2.6, cls: 'fig-est-fill' })).join('')}
     ${axes(box.x, base, box.x + box.w + 14, box.y - 6, { yLabel: L.altitude })}
-    ${text(box.x + box.w, yFloor - 6, `${esc(L.minAlt ?? '')} ${fmtKm(minAlt)}`, { anchor: 'end', cls: 'fig-danger', size: 9.5 })}
+    ${text(box.x + box.w * 0.5, yFloor - 7, `${esc(L.minAlt ?? '')} ${fmtKm(minAlt)}`, { anchor: 'middle', cls: 'fig-danger', size: 9.5 })}
     ${text(box.x + 6, base - 8, esc(L.occulted ?? ''), { cls: 'fig-dim', size: 9.5 })}
     ${text(box.x + box.w + 10, box.y + 4, esc(L.sighting ?? ''), { anchor: 'end', cls: 'fig-est', size: 10 })}
     ${polyline(stair, { cls: 'fig-est' })}
@@ -391,8 +391,8 @@ export function starTally({ labels: L, sensors, veh }) {
     ${text(box.x, tr.y - 8, esc(L.tally ?? ''), { cls: 'fig-est', size: 10 })}
     ${text(box.x + box.w, tr.y - 8, `${count} × ${period.toFixed(0)} s`, { anchor: 'end', cls: 'fig-est', size: 10.5 })}
     ${text(box.x + box.w, tr.y + tr.h + 14, esc(L.time ?? ''), { anchor: 'end', cls: 'fig-axis-label', size: 10 })}
-    ${text(box.x, tr.y + tr.h + 34, esc(L.caption ?? ''), { cls: 'fig-dim', size: 10 })}
-  `, { h: 228 });
+    ${text(box.x, tr.y + tr.h + 36, esc(L.caption ?? ''), { cls: 'fig-dim', size: 10 })}
+  `, { h: 254 });
 }
 
 /**
@@ -405,7 +405,7 @@ export function starTally({ labels: L, sensors, veh }) {
  * regard de ce que le filtre croit savoir. Le seuil est tres large : il
  * n'attrape que l'invraisemblable.
  */
-export function chiSquareGate({ labels: L, sensors }) {
+export function chiSquareGate({ labels: L = {}, sensors }) {
   const maxSigma = sensors?.terrain?.maxSigma ?? 1500;
 
   const boxes = [
@@ -469,7 +469,7 @@ export function chiSquareGate({ labels: L, sensors }) {
  * l'incertitude annoncee. Sur une plaine, tous les decalages se valent : le
  * minimum retenu tombe n'importe ou, et sa courbure ne dit plus rien.
  */
-export function terrainContrast({ labels: L, sensors }) {
+export function terrainContrast({ labels: L = {}, sensors }) {
   const maxSigma = sensors?.terrain?.maxSigma ?? 1500;
   const box = { x: 58, y: 24, w: 330, h: 116 };
   const base = box.y + box.h;
@@ -477,8 +477,8 @@ export function terrainContrast({ labels: L, sensors }) {
   const yOf = (c) => base - box.h * Math.min(1, c / 1.25);
 
   // Cout normalise : 1 = moyenne sur la grille de recherche.
-  const rough = (d) => 1 + 0.1 * Math.cos(d / 190) - 0.86 * Math.exp(-((d / 105) ** 2));
-  const flat = (d) => 1 + 0.028 * Math.cos(d / 150 + 1.1) - 0.075 * Math.exp(-(((d - 250) / 300) ** 2));
+  const rough = (d) => 1 + 0.1 * Math.cos(d / 190) - 0.88 * Math.exp(-((d / 105) ** 2));
+  const flat = (d) => 1 + 0.028 * Math.cos(d / 150 + 1.1) - 0.065 * Math.exp(-(((d - 250) / 300) ** 2));
 
   const sample = (f) => {
     const pts = [];
@@ -496,7 +496,7 @@ export function terrainContrast({ labels: L, sensors }) {
     ${polyline(sample(rough), { cls: 'fig-truth' })}
     ${line(xOf(0), yOf(rough(0)), xOf(0), yOf(1), { cls: 'fig-danger' })}
     ${dot(xOf(0), yOf(rough(0)), { r: 3, cls: 'fig-danger-fill' })}
-    ${text(xOf(0) + 8, yOf(rough(0)) + 4, esc(L.min ?? ''), { cls: 'fig-danger', size: 9.5 })}
+    ${text(xOf(0) - 8, yOf(rough(0)) + 4, esc(L.min ?? ''), { anchor: 'end', cls: 'fig-danger', size: 9.5 })}
     ${dot(xOf(250), yOf(flat(250)), { r: 3, cls: 'fig-est-fill' })}
     ${line(xOf(250), yOf(flat(250)) + 4, xOf(250), base, { cls: 'fig-est', dash: '2 3' })}
     ${text(xOf(250) + 6, base - 8, esc(L.wrongMin ?? ''), { cls: 'fig-est', size: 9.5 })}
