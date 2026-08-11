@@ -29,6 +29,19 @@ export const toScene = (ecef) => new THREE.Vector3(
 /** Inverse de `toScene` : ramene un point de la scene en ECEF. */
 export const fromScene = (v) => [v.x / SCENE_SCALE, -v.z / SCENE_SCALE, v.y / SCENE_SCALE];
 
+// Point subsolaire, et de la la direction du Soleil dans la scene.
+//
+// Une seule source de verite : le terminateur peint sur le globe, la teinte du
+// halo atmospherique et la lumiere qui eclaire l'engin doivent designer le
+// MEME astre. Deux valeurs qui derivent l'une de l'autre et l'ombre tombe d'un
+// cote pendant que les reflets brillent de l'autre.
+//
+// Position choisie pour la vue d'ouverture (bassin mediterraneen) : le site de
+// tir reste en plein jour, mais le terminateur mord assez sur le disque pour
+// que la sphere se lise comme une sphere et non comme un disque colorie.
+const SUN_LLA = { lat: 16, lon: -32 };
+const SUN_DIR = toScene(llaToEcef(SUN_LLA.lat, SUN_LLA.lon, 0)).normalize();
+
 const PALETTE = {
   ocean: '#08111d',
   oceanDeep: '#060d18',
@@ -37,6 +50,145 @@ const PALETTE = {
   graticule: 'rgba(120, 170, 200, 0.16)',
   equator: 'rgba(150, 200, 230, 0.34)',
 };
+
+/** Interpolation adoucie entre deux bornes, comme la fonction GLSL homonyme. */
+function smoothstep(a, b, x) {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Rampe hypsometrique, partagee par la texture du globe et par la nappe de sol
+ * local. Les deux DOIVENT lire la meme : le raccord entre le sol proche et la
+ * planete lointaine se verrait sinon comme une couture de couleur.
+ *
+ * La clarte suit surtout la RUGOSITE, pas l'altitude — c'est tres concretement
+ * la carte des regions ou une correlation de relief a des chances d'accrocher,
+ * et le joueur peut y choisir sa route en connaissance de cause.
+ *
+ * Teintes volontairement sombres : elles sont ensuite multipliees par
+ * l'eclairage de la scene. Une palette calibree pour « bien rendre » telle
+ * quelle sature des que le soleil tombe droit dessus, ce qui arrive
+ * precisement en vue au sol.
+ *
+ * `shade` est le facteur d'ombrage du relief ; il vaut 1 sur la nappe locale,
+ * qui recoit le vrai eclairage de la scene et n'a pas besoin d'ombrage peint.
+ * Ecrit trois octets dans `out` a partir de `o`.
+ */
+function hypsometric(h, rugged, absLat, shade, out, o = 0) {
+  const t = Math.min(1, h / 2400);
+  let r = 18 + 88 * t + 40 * rugged;
+  let g = 40 + 64 * t + 28 * rugged;
+  let b = 26 + 42 * t + 23 * rugged;
+
+  // Ligne des neiges. Elle descend de trois mille metres sous les tropiques
+  // jusqu'au niveau de la mer aux hautes latitudes : sans elle le Groenland et
+  // l'Antarctique sortaient en vert de plaine, et le globe n'avait plus ni
+  // haut ni bas.
+  const snow = Math.max(
+    smoothstep(66, 79, absLat),
+    smoothstep(0, 700, h - (3100 - 2500 * Math.pow(absLat / 90, 1.5))),
+  );
+  if (snow > 0) {
+    r += (208 - r) * snow;
+    g += (219 - g) * snow;
+    b += (215 - b) * snow;
+  }
+
+  r *= shade; g *= shade; b *= shade;
+  // On sature en PROPORTION plutot que canal par canal. Tronquer chaque canal
+  // separement vire au blanc rose sur les versants au soleil, et surtout
+  // detruit l'ordre vert > bleu dont le shader du globe se sert pour
+  // reconnaitre la mer.
+  const m = Math.max(r, g, b);
+  if (m > 252) { const s = 252 / m; r *= s; g *= s; b *= s; }
+  out[o] = r; out[o + 1] = g; out[o + 2] = b;
+}
+
+/**
+ * Bathymetrie schematique, peinte sous les continents.
+ *
+ * Un aplat bleu ne dit rien : une mer bordiere et une plaine abyssale y ont la
+ * meme couleur, et les continents flottent sur du vide. On teinte donc l'eau
+ * selon sa DISTANCE A LA COTE, seul parametre bathymetrique lisible a cette
+ * echelle — plateau continental clair, puis chute vers l'abysse.
+ *
+ * Calculee sur la grille du masque terre/mer puis etiree par le canvas : l'eau
+ * n'a aucun detail fin a rendre, et la faire en pleine resolution couterait
+ * trente fois plus cher pour une image identique.
+ */
+function buildBathymetry(mask, w, h, seed) {
+  // Distance a la cote, par double balayage de chanfrein. Une propagation
+  // exacte demanderait une file de priorite pour deux pour cent de precision
+  // en plus, dont une teinte d'eau n'a que faire.
+  const BIG = 1e6;
+  const dist = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) dist[i] = mask[i] ? 0 : BIG;
+  const D1 = 1, D2 = 1.41421356;
+  // Les balayages enjambent l'antimeridien : sans cela une fausse cote
+  // apparait au beau milieu du Pacifique, la ou la carte se referme.
+  const wrap = (x) => (x < 0 ? x + w : (x >= w ? x - w : x));
+  for (let y = 0; y < h; y++) {
+    const row = y * w, prev = row - w;
+    for (let x = 0; x < w; x++) {
+      let d = dist[row + x];
+      if (d === 0) continue;
+      if (y > 0) {
+        d = Math.min(d, dist[prev + x] + D1,
+          dist[prev + wrap(x - 1)] + D2, dist[prev + wrap(x + 1)] + D2);
+      }
+      dist[row + x] = Math.min(d, dist[row + wrap(x - 1)] + D1);
+    }
+  }
+  for (let y = h - 1; y >= 0; y--) {
+    const row = y * w, next = row + w;
+    for (let x = w - 1; x >= 0; x--) {
+      let d = dist[row + x];
+      if (d === 0) continue;
+      if (y < h - 1) {
+        d = Math.min(d, dist[next + x] + D1,
+          dist[next + wrap(x - 1)] + D2, dist[next + wrap(x + 1)] + D2);
+      }
+      dist[row + x] = Math.min(d, dist[row + wrap(x + 1)] + D1);
+    }
+  }
+
+  // On reutilise le generateur de relief plutot que d'ecrire un second bruit :
+  // une autre graine suffit, et sa longueur d'onde — le millier de kilometres —
+  // est justement celle des bassins et des dorsales.
+  const basins = makeTerrain({ seed: seed + 31, isLand: () => true });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(w, h);
+  const px = img.data;
+  for (let y = 0; y < h; y++) {
+    const lat = 90 - ((y + 0.5) / h) * 180;
+    // Banquise. Sans elle le pole nord reste un trou noir au milieu des
+    // calottes — un ocean, precisement, mais l'oeil y lit un defaut.
+    const iceLat = smoothstep(73, 82, Math.abs(lat));
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const lon = ((x + 0.5) / w) * 360 - 180;
+      const f = basins.ruggedness(lat, lon);
+      // Le plateau s'etend sur une a deux cellules, la chute vers l'abysse sur
+      // une demi-douzaine ; le champ de bassins deforme la bordure pour
+      // qu'elle ne suive pas servilement le trait de cote.
+      const shelf = 1 - smoothstep(0.8, 7.0, dist[i] * (0.7 + 0.6 * f));
+      let r = 5 + 13 * shelf + 4 * f;
+      let g = 13 + 34 * shelf + 7 * f;
+      let b = 26 + 42 * shelf + 11 * f;
+      const ice = iceLat * (0.55 + 0.45 * f);
+      if (ice > 0) { r += (138 - r) * ice; g += (152 - g) * ice; b += (149 - b) * ice; }
+      const o = i * 4;
+      px[o] = r; px[o + 1] = g; px[o + 2] = b; px[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas;
+}
 
 /**
  * Construit la texture equirectangulaire de la Terre a partir des contours
@@ -66,7 +218,7 @@ function buildEarthTexture(width = 4096, terrainSeed = 7) {
     ((90 - lat) / 180) * height,
   ];
 
-  const drawRings = (rings) => {
+  const ringPath = (rings) => {
     ctx.beginPath();
     for (const ring of rings) {
       ring.forEach(([lon, lat], i) => {
@@ -75,18 +227,27 @@ function buildEarthTexture(width = 4096, terrainSeed = 7) {
       });
       ctx.closePath();
     }
-    ctx.fill();
-    ctx.stroke();
   };
 
-  ctx.fillStyle = PALETTE.land;
-  ctx.strokeStyle = PALETTE.landEdge;
-  ctx.lineWidth = Math.max(1, width / 2048);
-  for (const f of land.features) {
-    const g = f.geometry;
-    if (g.type === 'Polygon') drawRings(g.coordinates);
-    else if (g.type === 'MultiPolygon') for (const p of g.coordinates) drawRings(p);
-  }
+  const eachLandPath = (fn) => {
+    for (const f of land.features) {
+      const g = f.geometry;
+      if (g.type === 'Polygon') { ringPath(g.coordinates); fn(); }
+      else if (g.type === 'MultiPolygon') for (const p of g.coordinates) { ringPath(p); fn(); }
+    }
+  };
+
+  const fillLand = () => {
+    ctx.fillStyle = PALETTE.land;
+    eachLandPath(() => ctx.fill());
+  };
+  const strokeCoast = () => {
+    ctx.strokeStyle = PALETTE.landEdge;
+    ctx.lineWidth = Math.max(1, width / 2048);
+    eachLandPath(() => ctx.stroke());
+  };
+  fillLand();
+  strokeCoast();
 
   // Masque de terre : releve AVANT le graticule, pour ne pas prendre les
   // meridiens pour des continents.
@@ -110,54 +271,120 @@ function buildEarthTexture(width = 4096, terrainSeed = 7) {
     return mask[y * maskW + x] === 1;
   };
 
+  // L'eau est repeinte PAR-DESSUS tout, continents compris, puis les terres
+  // sont retracees. C'est plus simple et plus rapide que de n'atteindre que
+  // les pixels d'ocean, et cela ne coute qu'un second trace des contours ; le
+  // masque, lui, a deja ete releve et reste donc rigoureusement inchange.
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(buildBathymetry(mask, maskW, maskH, terrainSeed), 0, 0, width, height);
+  fillLand();
+
   // --- Ombrage du relief ---
   //
   // On teinte les terres selon l'altitude et surtout selon la PENTE : les
-  // regions accidentees ressortent en clair. Ce n'est pas decoratif — c'est
-  // exactement la carte de la ou la correlation de terrain pourra travailler,
-  // et le joueur peut ainsi choisir sa route en connaissance de cause.
+  // regions accidentees ressortent en clair.
   const terrain = makeTerrain({ seed: terrainSeed, isLand });
   const img = ctx.getImageData(0, 0, width, height);
   const px = img.data;
   const block = 2; // on echantillonne un pixel sur deux : invisible, deux fois plus rapide
-  for (let py = 0; py < height; py += block) {
-    const lat = 90 - (py / height) * 180;
-    for (let pxx = 0; pxx < width; pxx += block) {
-      const lon = (pxx / width) * 360 - 180;
-      if (!isLand(lat, lon)) continue;
+  const cols = Math.ceil(width / block);
+  const rows = Math.ceil(height / block);
 
-      const { height: e, rugged } = terrain.displayElevation(lat, lon);
-      // Ombrage : on eclaire depuis le nord-ouest pour faire ressortir les
-      // pentes, comme sur une carte en relief.
-      const d = (360 / width) * block * 3;
-      const gx = terrain.displayElevation(lat, lon + d).height - e;
-      const gy = terrain.displayElevation(lat - d, lon).height - e;
-      const shade = Math.max(-1, Math.min(1, (gx - gy) / 260));
+  // Ecart des differences finies, en blocs. Plus court, on echantillonne le
+  // relief d'affichage sous sa plus fine longueur d'onde et l'ombrage devient
+  // du bruit ; plus long, les cretes s'emoussent.
+  const GAP = 3;
 
-      // Teinte hypsometrique : vert sombre en plaine, ocre puis clair en
-      // altitude. La CLARTE traduit surtout la rugosite — donc, tres
-      // concretement, la ou une correlation de relief pourra fonctionner.
-      // Teinte volontairement sombre : elle sera ensuite multipliee par
-      // l'eclairage de la scene. Une palette calibree pour « bien rendre »
-      // telle quelle sature des que le soleil tombe droit dessus — ce qui
-      // arrive precisement en vue au sol.
-      const h = Math.min(1, e / 2400);
-      const k = 1 + 0.45 * shade;
-      const r0 = (17 + 96 * h + 42 * rugged) * k;
-      const g0 = (33 + 72 * h + 34 * rugged) * k;
-      const b0 = (27 + 48 * h + 25 * rugged) * k;
+  // Chaque altitude sert a TROIS pixels : le sien, celui dont il est le voisin
+  // est, celui dont il est le voisin sud. On garde donc les lignes deja
+  // calculees dans un anneau au lieu de les evaluer trois fois — le champ de
+  // relief coute a lui seul l'essentiel du temps de chargement.
+  const ring = [];
+  for (let i = 0; i <= GAP; i++) {
+    ring.push({
+      row: -1,
+      h: new Float32Array(cols),
+      rug: new Float32Array(cols),
+      land: new Uint8Array(cols),
+    });
+  }
+  const rowAt = (j) => {
+    const jj = Math.min(j, rows - 1);
+    const slot = ring[jj % (GAP + 1)];
+    if (slot.row === jj) return slot;
+    const lat = 90 - ((jj * block) / height) * 180;
+    for (let i = 0; i < cols; i++) {
+      const lon = ((i * block) / width) * 360 - 180;
+      if (isLand(lat, lon)) {
+        const e = terrain.displayElevation(lat, lon);
+        slot.land[i] = 1; slot.h[i] = e.height; slot.rug[i] = e.rugged;
+      } else {
+        slot.land[i] = 0; slot.h[i] = 0; slot.rug[i] = 0;
+      }
+    }
+    slot.row = jj;
+    return slot;
+  };
 
+  // Soleil de carte : nord-ouest, trente degres au-dessus de l'horizon. C'est
+  // l'angle des cartes en relief depuis toujours — assez rasant pour dessiner
+  // les lignes de crete, assez haut pour ne pas noyer les versants a l'ombre.
+  const LX = -0.612, LY = 0.612, LZ = 0.5;
+  // Exageration verticale. A 4096 pixels un point couvre une cinquantaine de
+  // kilometres : les pentes vraies y sont de l'ordre du centieme et un ombrage
+  // honnete rendrait la carte parfaitement lisse. Les cartes en relief
+  // exagerent depuis toujours ; ici d'un facteur soixante.
+  const EXAG = 60;
+  const dLonDeg = (360 / width) * block * GAP;
+  const dym = (180 / height) * block * GAP * 110570;
+  const rgb = [0, 0, 0];
+
+  for (let j = 0; j < rows; j++) {
+    const r0 = rowAt(j);
+    const r3 = rowAt(j + GAP);
+    const lat = 90 - ((j * block) / height) * 180;
+    const absLat = Math.abs(lat);
+    // Plancher sur la largeur d'un pas en longitude : au-dela de 86 degres les
+    // meridiens se resserrent au point que la moindre bosse produirait une
+    // pente infinie, et la calotte partirait en eclairs blancs.
+    const dxm = Math.max(4000, dLonDeg * 111320 * Math.cos(lat * DEG));
+    const py = j * block;
+    for (let i = 0; i < cols; i++) {
+      if (!r0.land[i]) continue;
+      const e = r0.h[i];
+
+      const sx = Math.max(-4, Math.min(4, (r0.h[(i + GAP) % cols] - e) / dxm * EXAG));
+      const sy = Math.max(-4, Math.min(4, (e - r3.h[i]) / dym * EXAG));
+      const inv = 1 / Math.sqrt(sx * sx + sy * sy + 1);
+      const illum = (LZ - sx * LX - sy * LY) * inv;
+      // Rapporte au terrain plat, pour que la plaine garde exactement la
+      // teinte de la rampe et que seul le relief s'en ecarte.
+      const shade = Math.min(1.7, 0.30 + 0.70 * Math.pow(Math.max(0, illum) / LZ, 1.15));
+
+      hypsometric(e, r0.rug[i], absLat, shade, rgb);
+      const pxx = i * block;
       for (let by = 0; by < block && py + by < height; by++) {
         for (let bx = 0; bx < block && pxx + bx < width; bx++) {
           const o = ((py + by) * width + (pxx + bx)) * 4;
-          px[o] = Math.min(255, r0);
-          px[o + 1] = Math.min(255, g0);
-          px[o + 2] = Math.min(255, b0);
+          // Le masque terre/mer n'a qu'un demi-degre de cote : peindre le bloc
+          // entier deborderait dans l'eau et redecouperait toutes les cotes en
+          // escalier. On ne recouvre donc que les pixels que le trace des
+          // contours a effectivement remplis — ceux ou le vert l'emporte
+          // encore sur le bleu. Les mers interieures restent de l'eau, et le
+          // littoral garde la finesse du trace vectoriel.
+          if (px[o + 1] <= px[o + 2]) continue;
+          px[o] = rgb[0];
+          px[o + 1] = rgb[1];
+          px[o + 2] = rgb[2];
         }
       }
     }
   }
   ctx.putImageData(img, 0, 0);
+  // Le trait de cote passe APRES le relief, qui l'aurait sinon efface partout
+  // ou le masque voit de la terre.
+  strokeCoast();
 
   // Graticule trace APRES l'ombrage : dessine avant, le relief l'effacerait
   // sur toutes les terres.
@@ -182,31 +409,168 @@ function buildEarthTexture(width = 4096, terrainSeed = 7) {
   return { canvas, isLand, terrain };
 }
 
-/** Halo atmospherique, obtenu par un simple effet de Fresnel sur une coque. */
+// Sommet commun au globe et a sa coque atmospherique.
+//
+// La normale d'une coque spherique centree sur l'origine est sa propre
+// position : inutile de la transporter par la matrice normale, et l'on evite
+// au passage le piege classique de l'echelle non uniforme (les deux maillages
+// sont aplatis en Y). L'aplatissement de trois millièmes ne devie cette
+// normale que de deux dixiemes de degre, sous le seuil du visible.
+//
+// `#include <logdepthbuf_*>` : ces deux coques doivent ecrire la MEME
+// profondeur logarithmique que le reste de la scene, sans quoi leur test de
+// profondeur se compare a une echelle differente et le resultat n'a plus de
+// sens — halo qui recouvre les etoiles, ou globe qui disparait derriere elles.
+const SHELL_VERTEX = `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+  varying vec2 vUv;
+  varying vec3 vNrm;
+  varying vec3 vEye;
+  void main() {
+    vUv = uv;
+    vec4 wp = modelMatrix * vec4(position, 1.0);
+    vNrm = normalize(wp.xyz);
+    vEye = normalize(cameraPosition - wp.xyz);
+    gl_Position = projectionMatrix * viewMatrix * wp;
+    #include <logdepthbuf_vertex>
+  }`;
+
+/**
+ * Materiau du globe.
+ *
+ * On abandonne MeshStandardMaterial : il n'y a rien a eclairer physiquement
+ * ici — un astre unique, aucune ombre portee, une surface mate — et surtout il
+ * ne sait pas faire de terminateur. Un simple max(N.L, 0) donne une frontiere
+ * jour/nuit NETTE, ce qui est faux : l'atmosphere diffuse la lumiere bien
+ * au-dela du point de tangence geometrique, et la penombre s'etale en realite
+ * sur une dizaine de degres de longitude.
+ *
+ * La nuit n'est pas eteinte pour autant. Elle garde un fond bleute d'environ
+ * un huitieme du jour, ce qui correspond a peu pres a ce que la Lune et la
+ * lueur du ciel nocturne rendent visible — et ce qui laisse surtout au joueur
+ * de quoi designer un objectif du cote sombre.
+ */
+function earthMaterial(map) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uMap: { value: map },
+      uSun: { value: SUN_DIR },
+      uNight: { value: new THREE.Color(0.042, 0.052, 0.082) },
+      uHaze: { value: new THREE.Color(0.030, 0.058, 0.100) },
+      uGlint: { value: new THREE.Color(0.60, 0.56, 0.46) },
+    },
+    vertexShader: SHELL_VERTEX,
+    fragmentShader: `
+      #include <common>
+      #include <logdepthbuf_pars_fragment>
+      #include <tonemapping_pars_fragment>
+      uniform sampler2D uMap;
+      uniform vec3 uSun;
+      uniform vec3 uNight;
+      uniform vec3 uHaze;
+      uniform vec3 uGlint;
+      varying vec2 vUv;
+      varying vec3 vNrm;
+      varying vec3 vEye;
+      void main() {
+        #include <logdepthbuf_fragment>
+        vec3 albedo = texture2D(uMap, vUv).rgb;
+        vec3 n = normalize(vNrm);
+        vec3 e = normalize(vEye);
+        float ndl = dot(n, uSun);
+
+        // Terminateur : une dizaine de degres de penombre de part et d'autre.
+        float day = smoothstep(-0.16, 0.21, ndl);
+        // Le terme constant est l'eclairement du ciel : sous une atmosphere,
+        // meme un versant tourne a l'oppose du Soleil recoit du bleu diffus.
+        float diff = day * (0.09 + 0.30 * max(ndl, 0.0));
+
+        // Mer ou terre ? La rampe hypsometrique garde partout le vert
+        // au-dessus du bleu, la bathymetrie l'inverse partout. On lit donc le
+        // meme critere que le masque construit au chargement — et en RAPPORT,
+        // pour qu'il reste valable a l'ombre comme en plein soleil.
+        float lm = (albedo.g - albedo.b) / (albedo.g + albedo.b + 2e-4);
+        float sea = 1.0 - smoothstep(-0.06, 0.04, lm);
+
+        // Reflet du Soleil sur la mer : un lobe etroit pour l'eclat, un large
+        // pour la trainee argentee qui l'entoure. C'est ce qui trahit l'eau.
+        vec3 hv = normalize(uSun + e);
+        float nh = max(dot(n, hv), 0.0);
+        float glint = (pow(nh, 320.0) * 0.9 + pow(nh, 95.0) * 0.12) * sea * day;
+
+        vec3 col = albedo * diff + albedo * uNight * (1.0 - day);
+        col += uGlint * glint;
+
+        // Diffusion vue de face : la couche d'air s'epaissit vers le bord du
+        // disque, exactement comme au limbe, et voile le sol d'autant.
+        float rim = 1.0 - max(dot(n, e), 0.0);
+        col += uHaze * pow(rim, 3.0) * day * (0.30 + 0.70 * max(ndl, 0.0));
+
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+}
+
+/**
+ * Halo atmospherique.
+ *
+ * Un Fresnel uniforme donne un lisere de meme couleur et de meme epaisseur
+ * tout autour du disque, ce que l'atmosphere ne fait jamais. Au limbe, un
+ * rayon traverse des dizaines de fois plus d'air qu'au zenith ; pres du
+ * terminateur il rase en outre la surface sur des milliers de kilometres, et
+ * la diffusion de Rayleigh a largement le temps d'evacuer tout le bleu. Il ne
+ * reste que l'orange — c'est le lever de soleil, vu d'en haut. On fait donc
+ * varier la TEINTE avec l'angle du Soleil, et pas seulement l'opacite.
+ *
+ * L'atmosphere s'eleve a cent kilometres : elle reste eclairee un peu apres
+ * que le sol soit passe dans l'ombre. Son terminateur a elle est donc en
+ * retard de quelques degres sur celui du globe, et c'est ce decalage qui fait
+ * le lisere lumineux du cote nuit.
+ */
 function atmosphereMaterial() {
   return new THREE.ShaderMaterial({
     transparent: true,
     side: THREE.BackSide,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
-    uniforms: { uColor: { value: new THREE.Color(0x4a9fd8) } },
-    vertexShader: `
-      varying vec3 vNormal;
-      varying vec3 vView;
-      void main() {
-        vNormal = normalize(normalMatrix * normal);
-        vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        vView = normalize(-mv.xyz);
-        gl_Position = projectionMatrix * mv;
-      }`,
+    uniforms: {
+      uZenith: { value: new THREE.Color(0x4a9fd8) },
+      uLimb: { value: new THREE.Color(0xffa96b) },
+      uSun: { value: SUN_DIR },
+    },
+    vertexShader: SHELL_VERTEX,
     fragmentShader: `
-      uniform vec3 uColor;
-      varying vec3 vNormal;
-      varying vec3 vView;
+      #include <common>
+      #include <logdepthbuf_pars_fragment>
+      uniform vec3 uZenith;
+      uniform vec3 uLimb;
+      uniform vec3 uSun;
+      varying vec2 vUv;
+      varying vec3 vNrm;
+      varying vec3 vEye;
       void main() {
-        float rim = 1.0 - abs(dot(vNormal, vView));
-        float a = pow(rim, 3.0) * 0.85;
-        gl_FragColor = vec4(uColor, a);
+        #include <logdepthbuf_fragment>
+        vec3 n = normalize(vNrm);
+        vec3 e = normalize(vEye);
+        float rim = 1.0 - abs(dot(n, e));
+        float ndl = dot(n, uSun);
+
+        float lit = smoothstep(-0.28, 0.18, ndl);
+        // Bande crepusculaire : maximale la ou le Soleil rase l'horizon.
+        float dusk = 1.0 - smoothstep(0.0, 0.42, abs(ndl));
+
+        // Diffusion vers l'avant : en regardant vers le Soleil a travers le
+        // limbe, l'air renvoie plusieurs fois plus de lumiere qu'en le prenant
+        // de dos. C'est ce qui fait qu'un croissant est toujours cercle d'un
+        // halo plus vif que la pleine face.
+        float fwd = 0.80 + 0.95 * pow(max(-dot(e, uSun), 0.0), 3.0);
+
+        vec3 col = mix(uZenith, uLimb, dusk * dusk * 0.60);
+        float a = pow(rim, 3.0) * lit * (0.82 + 0.48 * dusk * dusk) * fwd;
+        gl_FragColor = vec4(col, min(a, 1.0));
       }`,
   });
 }
@@ -253,7 +617,9 @@ export class GlobeView {
     this.installLookControls();
 
     const R = EARTH.a * SCENE_SCALE;
+    const _t0 = performance.now();
     const { canvas: texCanvas, isLand, terrain } = buildEarthTexture(4096, 7);
+    window.__texMs = performance.now() - _t0;
     this.isLand = isLand;
     this.terrain = terrain;
 
@@ -264,7 +630,7 @@ export class GlobeView {
     // Sphere legerement aplatie, comme l'ellipsoide de reference.
     this.earth = new THREE.Mesh(
       new THREE.SphereGeometry(R, 128, 96),
-      new THREE.MeshStandardMaterial({ map: texture, roughness: 0.95, metalness: 0.0 }),
+      earthMaterial(texture),
     );
     this.earth.scale.set(1, EARTH.b / EARTH.a, 1);
     // Aucune rotation : la parametrisation UV de SphereGeometry place u = 0 sur
@@ -312,26 +678,39 @@ export class GlobeView {
     this.groundPatch.frustumCulled = false;
     this.scene.add(this.groundPatch);
 
-    // Eclairage volontairement modere : la texture du globe contient DEJA un
-    // ombrage de relief calcule au chargement. La reeclairer trop fort la fait
-    // saturer — invisible depuis l'orbite, ou l'on voit surtout des angles
-    // rasants, mais aveuglant en vue au sol quand le soleil est au zenith.
+    // Eclairage volontairement modere : la nappe de sol local, le seul objet
+    // etendu que ces lampes eclairent encore, porte DEJA sa teinte de relief.
+    // La reeclairer trop fort la fait saturer — sans consequence depuis
+    // l'orbite ou l'on voit surtout des angles rasants, mais aveuglant en vue
+    // au sol quand le soleil tombe droit dessus.
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.32));
     const sun = new THREE.DirectionalLight(0xfff4e0, 0.85);
-    sun.position.set(1, 0.45, 0.8).normalize().multiplyScalar(50);
+    sun.position.copy(SUN_DIR).multiplyScalar(50);
     this.scene.add(sun);
 
     this.scene.add(this.makeStarfield());
     this.raycaster = new THREE.Raycaster();
     this.resize();
+    window.__globe = this;
   }
 
+  /**
+   * Voute etoilee.
+   *
+   * Le ciel reel n'est pas une poussiere uniforme : le nombre d'etoiles
+   * environ triple a chaque magnitude, si bien que l'oeil accroche quelques
+   * points francs sur un fond de points a peine perceptibles. C'est ce
+   * contraste, et non le nombre, qui donne au ciel son grain — ce qui compte
+   * surtout en vue de poursuite, ou il occupe la moitie de l'image.
+   */
   makeStarfield() {
-    const n = 2600;
+    const n = 4200;
     const pos = new Float32Array(n * 3);
-    // Repartition uniforme sur la sphere : il faut tirer le cosinus de la
-    // colatitude, pas l'angle, sinon les etoiles s'agglutinent aux poles.
+    const col = new Float32Array(n * 3);
+    const size = new Float32Array(n);
     for (let i = 0; i < n; i++) {
+      // Repartition uniforme sur la sphere : il faut tirer le cosinus de la
+      // colatitude, pas l'angle, sinon les etoiles s'agglutinent aux poles.
       const u = Math.random() * 2 - 1;
       const th = Math.random() * Math.PI * 2;
       const s = Math.sqrt(1 - u * u);
@@ -339,12 +718,66 @@ export class GlobeView {
       pos[i * 3] = r * s * Math.cos(th);
       pos[i * 3 + 1] = r * u;
       pos[i * 3 + 2] = r * s * Math.sin(th);
+
+      // Eclat en loi de puissance : le cube d'un tirage uniforme reproduit
+      // assez bien le fait qu'il y a une centaine de fois plus d'etoiles a la
+      // limite de visibilite que de vraiment brillantes.
+      const b = Math.pow(Math.random(), 3);
+
+      // Indice de couleur : negatif pour les etoiles chaudes (bleutees),
+      // positif pour les naines froides (orangees). Les brillantes penchent
+      // vers le bleu — une geante chaude rayonne des milliers de fois plus
+      // qu'une naine rouge, et se voit donc de bien plus loin.
+      const bv = (Math.random() * 2 - 1) * 0.85 - 0.35 * b;
+      const warm = Math.max(0, bv), cold = Math.max(0, -bv);
+      const lum = 0.26 + 0.74 * b;
+      col[i * 3] = (1 - 0.24 * cold) * lum;
+      col[i * 3 + 1] = (1 - 0.10 * warm - 0.09 * cold) * lum;
+      col[i * 3 + 2] = (1 - 0.36 * warm) * lum;
+      size[i] = 1.05 + 2.4 * b * b;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    return new THREE.Points(geo, new THREE.PointsMaterial({
-      color: 0x9fb8d0, size: 0.35, sizeAttenuation: true, transparent: true, opacity: 0.75,
-    }));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+
+    // Taille en pixels et NON attenuee par la distance : les etoiles sont a
+    // l'infini optique, et les faire grossir quand la camera recule — ce que
+    // fait l'attenuation de Three.js — donnerait un ciel qui respire.
+    this.starMaterial = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      // Le drapeau declare l'attribut `color` ; le nom est impose par Three.js.
+      vertexColors: true,
+      uniforms: { uPixelRatio: { value: 1 } },
+      vertexShader: `
+        #include <common>
+        #include <logdepthbuf_pars_vertex>
+        attribute float aSize;
+        uniform float uPixelRatio;
+        varying vec3 vTint;
+        void main() {
+          vTint = color;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = aSize * uPixelRatio;
+          #include <logdepthbuf_vertex>
+        }`,
+      fragmentShader: `
+        #include <common>
+        #include <logdepthbuf_pars_fragment>
+        varying vec3 vTint;
+        void main() {
+          #include <logdepthbuf_fragment>
+          // Profil gaussien : un point carre se remarque immediatement, et un
+          // disque a bord net scintille des que l'image bouge d'un demi-pixel.
+          float d = length(gl_PointCoord - 0.5) * 2.0;
+          float a = exp(-d * d * 3.2);
+          if (a < 0.02) discard;
+          gl_FragColor = vec4(vTint * a, a);
+        }`,
+    });
+    return new THREE.Points(geo, this.starMaterial);
   }
 
   resize() {
@@ -353,6 +786,9 @@ export class GlobeView {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    // gl_PointSize compte en pixels du tampon, pas en pixels CSS : sans ce
+    // facteur les etoiles maigrissent de moitie sur un ecran a haute densite.
+    if (this.starMaterial) this.starMaterial.uniforms.uPixelRatio.value = this.renderer.getPixelRatio();
   }
 
   /**
@@ -495,6 +931,7 @@ export class GlobeView {
     const colors = new Float32Array(n * n * 3);
     const mPerDegLat = 110570;
     const mPerDegLon = 111320 * Math.cos(lla.lat * DEG);
+    const rgb = [0, 0, 0];
 
     for (let iy = 0; iy < n; iy++) {
       for (let ix = 0; ix < n; ix++) {
@@ -512,13 +949,14 @@ export class GlobeView {
         const i = iy * n + ix;
         pos.setXYZ(i, sp.x, sp.y, sp.z);
 
-        // Meme teinte hypsometrique que la texture du globe, pour que le
-        // raccord entre le sol proche et le globe lointain ne saute pas.
-        const rug = this.terrain.ruggedness(lat, lon);
-        const t = Math.min(1, h / 2400);
-        colors[i * 3] = (17 + 96 * t + 42 * rug) / 255;
-        colors[i * 3 + 1] = (33 + 72 * t + 34 * rug) / 255;
-        colors[i * 3 + 2] = (27 + 48 * t + 25 * rug) / 255;
+        // Meme rampe hypsometrique que la texture du globe, pour que le
+        // raccord entre le sol proche et le globe lointain ne saute pas. Sans
+        // ombrage peint, en revanche : cette nappe a de vraies normales et
+        // recoit le vrai eclairage de la scene.
+        hypsometric(h, this.terrain.ruggedness(lat, lon), Math.abs(lat), 1, rgb);
+        colors[i * 3] = rgb[0] / 255;
+        colors[i * 3 + 1] = rgb[1] / 255;
+        colors[i * 3 + 2] = rgb[2] / 255;
       }
     }
     pos.needsUpdate = true;

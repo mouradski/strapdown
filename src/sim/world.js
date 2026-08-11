@@ -19,6 +19,7 @@ import {
   computeForces, makeDeriv, attitudeRateCommand,
   thrustAttitude, windAttitude, airRelativeVelocity, IDX,
 } from './dynamics.js';
+import { AerothermalMonitor } from './aerothermal.js';
 import { IMU, Altimeter, StarTracker, TerrainCorrelator, IMU_GRADES, U } from '../avionics/sensors.js';
 import { InertialNavigator, tuningFromImuConfig } from '../avionics/navigation.js';
 import { FlightComputer, PHASE } from '../guidance/computer.js';
@@ -109,6 +110,9 @@ export class Simulation {
     this.trailEst = [];
     this.lastTrailTime = -1e9;
     this.telemetry = [];
+    // Temoin aerothermique. Il ne participe a aucune boucle : la trajectoire
+    // est rigoureusement la meme qu'on l'instrumente ou non.
+    this.aero = new AerothermalMonitor(veh);
     this.maxQ = 0;
     this.maxAccel = 0;
     this.apogee = 0;
@@ -291,6 +295,9 @@ export class Simulation {
     this.t = t + dt;
 
     // 7) Suivi des maxima et des evenements mecaniques.
+    // Les trois bilans de forces du pas servent une seconde fois ici, pour
+    // integrer la charge thermique sans rien recalculer.
+    this.aero.integrate(t - this.launchTime, dt, fStart, fMid, fEnd, this.ctrl.separated);
     this.maxQ = Math.max(this.maxQ, fStart.qDyn);
     this.maxAccel = Math.max(this.maxAccel, V.norm(fStart.aSpecific));
     const alt = this.altTrue;
@@ -412,6 +419,7 @@ export class Simulation {
       terrainRejected: this.terrain.rejected,
       alignmentError: this.initialAlignment,
       updates: { ...this.nav.updates },
+      ...this.aero.summary(),
     };
     this.log('events.impact', { miss: formatDistance(miss.dist) });
   }
@@ -487,6 +495,10 @@ export class Simulation {
     const lla = this.llaTrue;
     const navLla = ecefToLla(eciToEcef(this.nav.r, this.t));
     const vRel = airRelativeVelocity(this.rTrue, this.vTrue);
+    // Recalcule plutot que relu du dernier pas : le HUD affiche l'etat qu'il a
+    // sous les yeux, et l'affichage tourne plus vite que la simulation quand le
+    // pas s'allonge en vol exo-atmospherique.
+    const heat = this.aero.sample(f, this.ctrl.separated);
     return {
       t: this.t - this.launchTime,
       running: this.running,
@@ -503,6 +515,10 @@ export class Simulation {
       mach: f.mach,
       qDyn: f.qDyn,
       accel: V.norm(f.aSpecific) / 9.80665,
+      // Aerothermique. Unites SI strictes : W/m^2, J/m^2, K.
+      heatRate: heat.heatRate,
+      heatLoad: this.aero.heatLoad,
+      surfaceTemp: heat.surfaceTemp,
       mass: f.mass,
       thrust: f.thrust,
       stageIndex: this.ctrl.stageIndex,
