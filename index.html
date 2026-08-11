@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Strapdown — ballistic trajectory and inertial navigation</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🛰️</text></svg>" />
+  <link rel="stylesheet" href="./src/ui/styles.css" />
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <div id="labels"></div>
+  <div id="view-hint" style="display:none">
+    <span data-i18n="view.hint"></span>
+    <button id="btn-track" class="ghost small" data-i18n="view.track"
+            style="width:auto;display:inline-block;margin:0 0 0 6px;padding:3px 8px"></button>
+  </div>
+
+  <header id="topbar">
+    <div class="brand">
+      <strong data-i18n="app.title"></strong>
+      <span class="sub" data-i18n="app.subtitle"></span>
+    </div>
+    <div class="clock">
+      <span id="mission-time">T− 00:00</span>
+      <button id="phase-label" class="chip" data-i18n="phase.prelaunch" data-i18n-title="help.info"></button>
+    </div>
+    <div class="time-controls">
+      <button id="btn-pause" class="icon" data-i18n-title="app.pause">❚❚</button>
+      <div class="speeds" id="views">
+        <button data-view="orbite" class="active" data-i18n="view.orbit"></button>
+        <button data-view="poursuite" data-i18n="view.chase"></button>
+        <button data-view="sol" data-i18n="view.ground"></button>
+      </div>
+      <div class="speeds" id="speeds">
+        <button data-speed="1" class="active">×1</button>
+        <button data-speed="10">×10</button>
+        <button data-speed="50">×50</button>
+        <button data-speed="200">×200</button>
+      </div>
+      <select id="locale-select" class="locale" data-i18n-title="app.language"></select>
+      <button id="btn-help" class="icon" data-i18n-title="app.help">?</button>
+    </div>
+  </header>
+
+  <aside id="panel-left" class="panel">
+    <button class="panel-toggle" data-target="panel-left" data-i18n="mission.title"></button>
+    <div class="panel-body">
+      <h2 data-i18n="mission.title"></h2>
+
+      <section>
+        <label class="field-label"><span data-i18n="mission.vehicle"></span><button type="button" class="info-btn sm" data-help="mission.range" data-i18n-title="help.info">i</button></label>
+        <div id="vehicle-list" class="vehicle-list"></div>
+      </section>
+
+      <section>
+        <label class="field-label"><span data-i18n="mission.launchSite"></span><button type="button" class="info-btn sm" data-help="mission.launchSite" data-i18n-title="help.info">i</button></label>
+        <select id="launch-preset"></select>
+        <div class="coord-row">
+          <input id="launch-lat" type="number" step="0.0001" />
+          <input id="launch-lon" type="number" step="0.0001" />
+        </div>
+        <button id="pick-launch" class="ghost small" data-i18n="mission.pickOnGlobe"></button>
+      </section>
+
+      <section>
+        <label class="field-label"><span data-i18n="mission.target"></span><button type="button" class="info-btn sm" data-help="mission.target" data-i18n-title="help.info">i</button></label>
+        <div class="coord-row">
+          <input id="target-lat" type="number" step="0.0001" />
+          <input id="target-lon" type="number" step="0.0001" />
+        </div>
+        <button id="pick-target" class="ghost small active" data-i18n="mission.pickOnGlobe"></button>
+        <p class="hint" data-i18n-html="mission.targetHint"></p>
+      </section>
+
+      <section id="loft-section">
+        <label class="field-label">
+          <span data-i18n="mission.loft"></span><button type="button" class="info-btn sm" data-help="mission.loft" data-i18n-title="help.info">i</button>
+          <span id="loft-value" class="val"></span>
+        </label>
+        <input id="loft" type="range" min="0" max="100" value="0" />
+        <p class="hint" data-i18n="mission.loftHint"></p>
+      </section>
+
+      <div class="readout" id="mission-readout"></div>
+
+      <div class="actions">
+        <button id="btn-launch" class="primary" data-i18n="mission.launch"></button>
+        <button id="btn-reset" class="ghost" data-i18n="mission.reset"></button>
+      </div>
+      <button id="btn-montecarlo" class="ghost wide" data-i18n="mission.montecarlo"></button>
+    </div>
+  </aside>
+
+  <aside id="panel-right" class="panel right">
+    <button class="panel-toggle" data-target="panel-right" data-i18n="sensors.title"></button>
+    <div class="tabs" id="right-tabs">
+      <button data-pane="pane-config" class="active" data-i18n="tabs.settings"></button>
+      <button data-pane="pane-telemetry" data-i18n="tabs.telemetry"></button>
+    </div>
+
+    <div class="panel-body" id="pane-telemetry" hidden>
+      <h2 data-i18n="telemetry.title"></h2>
+      <p class="hint" data-i18n-html="telemetry.intro"></p>
+      <div id="tlm-sensors"></div>
+      <div id="tlm-commands"></div>
+    </div>
+
+    <div class="panel-body" id="pane-config">
+      <h2 data-i18n="sensors.title"></h2>
+      <p class="hint" data-i18n="sensors.intro"></p>
+
+      <section class="module">
+        <h3><span data-i18n="sensors.imu"></span><button type="button" class="info-btn" data-help="sensor.imu" data-i18n-title="help.info">i</button></h3>
+        <label class="field-label sr-row"><span data-i18n="sensors.imuGrade"></span><button type="button" class="info-btn sm" data-help="imu.grade" data-i18n-title="help.info">i</button></label>
+        <select id="imu-grade"></select>
+        <div id="imu-detail" class="detail"></div>
+        <p class="hint" data-i18n-html="sensors.imuHint"></p>
+      </section>
+
+      <section class="module">
+        <h3>
+          <label class="switch"><input type="checkbox" id="star-enabled" checked /><span></span></label>
+          <span data-i18n="sensors.star"></span><button type="button" class="info-btn" data-help="sensor.star" data-i18n-title="help.info">i</button>
+        </h3>
+        <div id="star-detail" class="detail"></div>
+        <p class="hint" data-i18n="sensors.starHint"></p>
+      </section>
+
+      <section class="module">
+        <h3>
+          <label class="switch"><input type="checkbox" id="alt-enabled" checked /><span></span></label>
+          <span data-i18n="sensors.alt"></span><button type="button" class="info-btn" data-help="sensor.alt" data-i18n-title="help.info">i</button>
+        </h3>
+        <div id="alt-detail" class="detail"></div>
+        <p class="hint" data-i18n="sensors.altHint"></p>
+      </section>
+
+      <section class="module">
+        <h3>
+          <label class="switch"><input type="checkbox" id="terrain-enabled" /><span></span></label>
+          <span data-i18n="sensors.terrain"></span><button type="button" class="info-btn" data-help="sensor.terrain" data-i18n-title="help.info">i</button>
+        </h3>
+        <div id="terrain-detail" class="detail"></div>
+        <p class="hint" data-i18n-html="sensors.terrainHint"></p>
+      </section>
+
+      <section class="module">
+        <h3><span data-i18n="sensors.computer"></span><button type="button" class="info-btn" data-help="sensor.computer" data-i18n-title="help.info">i</button></h3>
+        <label class="row">
+          <span data-i18n="sensors.gravityModel"></span><button type="button" class="info-btn sm" data-help="computer.gravityModel" data-i18n-title="help.info">i</button>
+          <select id="gravity-model">
+            <option value="j2" data-i18n="sensors.gravityJ2"></option>
+            <option value="point" data-i18n="sensors.gravityPoint"></option>
+          </select>
+        </label>
+        <label class="row">
+          <span><label class="switch inline"><input type="checkbox" id="midcourse-enabled" /><span></span></label>
+            <span data-i18n="sensors.midcourse"></span><button type="button" class="info-btn sm" data-help="computer.midcourse" data-i18n-title="help.info">i</button></span>
+        </label>
+        <div id="midcourse-detail" class="detail"></div>
+        <p class="hint" data-i18n-html="sensors.midcourseHint"></p>
+      </section>
+    </div>
+  </aside>
+
+  <footer id="hud">
+    <div class="hud-grid" id="hud-grid"></div>
+  </footer>
+
+  <div id="result" class="modal hidden">
+    <div class="modal-card">
+      <h2 id="result-title" data-i18n="result.title"></h2>
+      <div id="result-body"></div>
+      <div class="modal-actions">
+        <button id="result-close" class="primary" data-i18n="result.close"></button>
+        <button id="result-again" class="ghost" data-i18n="result.again"></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="montecarlo" class="modal hidden">
+    <div class="modal-card wide">
+      <h2 data-i18n="mc.title"></h2>
+      <p class="hint" id="mc-status"></p>
+      <canvas id="mc-canvas" width="520" height="520"></canvas>
+      <div id="mc-stats"></div>
+      <div class="modal-actions">
+        <button id="mc-close" class="primary" data-i18n="result.close"></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="help" class="modal hidden">
+    <div class="modal-card wide">
+      <h2 data-i18n="help.title"></h2>
+      <div class="help-body">
+        <p data-i18n-html="help.p1"></p>
+        <p data-i18n-html="help.p2"></p>
+        <p data-i18n-html="help.p3"></p>
+        <h3 data-i18n="help.vehiclesTitle"></h3>
+        <ul>
+          <li data-i18n-html="help.v1"></li>
+          <li data-i18n-html="help.v2"></li>
+        </ul>
+        <h3 data-i18n="help.controlsTitle"></h3>
+        <ul>
+          <li data-i18n-html="help.c1"></li>
+          <li data-i18n-html="help.c2"></li>
+          <li data-i18n-html="help.c3"></li>
+        </ul>
+      </div>
+      <div class="modal-actions"><button id="help-close" class="primary" data-i18n="result.close"></button></div>
+    </div>
+  </div>
+
+  <div id="help-topic" class="modal hidden">
+    <div class="modal-card wide topic-card">
+      <h2 id="help-topic-title"></h2>
+      <div id="help-topic-figure" class="topic-figure"></div>
+      <p id="help-topic-caption" class="topic-caption"></p>
+      <div id="help-topic-body" class="help-body"></div>
+      <div class="modal-actions">
+        <button id="help-topic-close" class="primary" data-i18n="result.close"></button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

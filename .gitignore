@@ -1,0 +1,13 @@
+# Dépendances
+node_modules/
+
+# Sortie de compilation
+dist/
+
+# Éditeurs
+.idea/
+.vscode/
+.DS_Store
+
+# Configuration locale de la machine
+.claude/settings.local.json
