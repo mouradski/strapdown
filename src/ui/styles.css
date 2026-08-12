@@ -772,3 +772,10 @@ button.chip:hover { color: var(--text); border-color: var(--accent); }
 
 /* Libellé de liste déroulante, aligné sur les libellés de curseur. */
 .field-label.sr-row { margin-bottom: 5px; justify-content: flex-start; }
+
+/* Bandes pleines des schemas comparatifs : la surface porte l'information
+   (largeur d'une fenetre d'autorite), pas seulement le contour. */
+.help-fig .fig-fill { fill-opacity: 0.3; }
+.help-fig .fig-fill.fig-truth-box { fill: var(--truth); }
+.help-fig .fig-fill.fig-est-box { fill: var(--estimate); }
+.help-fig .fig-fill.fig-danger-box { fill: var(--danger); }

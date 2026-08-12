@@ -123,6 +123,48 @@ export const VEHICLES = {
     // presque tout de suite, sinon la trajectoire est deja trop cabree.
     guidance: { verticalRise: 5, pitchKick: 24, turnEnd: 10 },
   },
+
+  marv: {
+    id: 'marv',
+    // Corps de rentree MANOEUVRANT. Plus lourd qu'un corps de rentree ordinaire :
+    // il emporte des gouvernes, leurs actionneurs et de quoi les alimenter.
+    payloadMass: 750,
+    refArea: 1.23, // lanceur d'environ 1.25 m de diametre
+    // Monoetage a ergols liquides stockables. L'impulsion specifique est
+    // nettement inferieure a celle d'un propergol solide performant, et c'est
+    // structurant : a masse egale, ce vecteur porte moins loin. En revanche la
+    // fraction structurale d'un reservoir liquide est meilleure que celle d'un
+    // corps de propulseur solide, ce qui rattrape une partie du retard.
+    stages: [
+      { thrustVac: 300e3, thrustSL: 265e3, ispVac: 255, propMass: 16000, dryMass: 1800 },
+    ],
+    // Coefficient balistique modere : les gouvernes trainent. C'est le prix de
+    // la manoeuvrabilite, et il se paie en vitesse a l'impact.
+    rv: { ballisticCoef: 4200, refArea: 0.36 },
+    glide: null,
+    // Corps de rentree manoeuvrant : la portance vient de gouvernes, pas d'un
+    // fuselage porteur. Elle est donc FAIBLE — mais elle existe, et seulement
+    // la ou l'air est assez dense pour que les gouvernes mordent.
+    marv: {
+      // Efficacite des gouvernes : coefficient de portance par radian
+      // d'incidence, autour de l'axe. Un ordre de grandeur au-dessus de la
+      // portance parasite d'un corps de rentree ordinaire (0.6), un ordre de
+      // grandeur en dessous d'un corps porteur.
+      liftSlope: 1.8,
+      // Incidence maximale. Elle est petite : un corps de rentree elance ne
+      // supporte pas de se mettre en travers a Mach 8 sous forte pression
+      // dynamique, et ses gouvernes decrocheraient.
+      maxAoA: 9 * (Math.PI / 180),
+      // Pression dynamique minimale pour que les gouvernes soient efficaces.
+      // En dessous, commander une incidence ne produit rien : c'est ce qui
+      // borne l'autorite du vecteur a la toute fin du vol.
+      minQ: 12000,
+      // Facteur de charge que la cellule accepte en manoeuvre terminale.
+      maxLoad: 8,
+    },
+    usefulRange: 1800e3, // mesuree par balayage : au-dela, il tombe court
+    guidance: { verticalRise: 7, pitchKick: 4.5, turnEnd: 58 },
+  },
 };
 
 /** Masse totale courante, en kg. */

@@ -96,6 +96,17 @@ export function computeForces(t, y, ctrl) {
       const c = glideCoefficients(veh, aoa);
       cl = c.cl;
       cd = c.cd;
+    } else if (ctrl.aeroMode === 'marv') {
+      // Corps de rentree manoeuvrant. La trainee de base reste celle d'un corps
+      // de rentree — c'est le coefficient balistique qui la fixe — mais des
+      // gouvernes lui ajoutent une portance commandable, et la trainee induite
+      // qui va avec. Cette derniere n'est pas un detail : c'est elle qui fait
+      // qu'une manoeuvre terminale se paie en vitesse a l'impact.
+      area = veh.rv.refArea;
+      const m = veh.marv;
+      const s2 = Math.sin(2 * aoa);
+      cl = m.liftSlope * s2;
+      cd = veh.payloadMass / (veh.rv.ballisticCoef * area) + 0.9 * cl * cl;
     } else if (ctrl.aeroMode === 'rv') {
       area = veh.rv.refArea;
       // Corps de rentree non porteur : le coefficient balistique fixe tout.

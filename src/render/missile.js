@@ -336,6 +336,26 @@ export function buildMissile(veh) {
       mats.tps,
     );
     payload.add(body);
+
+    // Corps de rentree MANOEUVRANT : quatre gouvernes en croix au culot.
+    //
+    // C'est la seule difference de silhouette avec un corps de rentree
+    // ordinaire, et elle suffit — c'est aussi la seule difference reelle. Les
+    // gouvernes sont petites : elles ne servent qu'a devier de quelques
+    // kilometres dans les dernieres secondes, pas a planer. Et elles sont au
+    // CULOT, loin du centre de masse, sinon elles n'auraient aucun bras de
+    // levier en tangage.
+    if (veh.marv) {
+      const L = dim.payloadLength;
+      const R = dim.payloadDiameter / 2;
+      const finGeo = panelGeometry(L * 0.2, L * 0.09, R * 0.85, L * 0.05, R * 0.1);
+      for (let k = 0; k < 4; k++) {
+        const fin = new THREE.Mesh(finGeo, mats.dark);
+        fin.rotation.x = (k * Math.PI) / 2;
+        fin.position.x = L * 0.09;
+        payload.add(fin);
+      }
+    }
     // Jupe de culot : la seule piece claire du corps de rentree, elle donne
     // l'echelle et marque le sens du cone.
     payload.add(new THREE.Mesh(

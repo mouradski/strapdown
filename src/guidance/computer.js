@@ -18,7 +18,7 @@
 // permet a un meme vecteur de couvrir toutes les portees jusqu'a son maximum,
 // sans programme de vol fige a l'avance.
 
-import { EARTH, DEG, RAD } from '../core/constants.js';
+import { EARTH, DEG, RAD, G0 } from '../core/constants.js';
 import * as V from '../core/vec.js';
 import {
   llaToEcef, ecefToLla, eciToEcef, ecefToEci, enuToEcef,
@@ -60,6 +60,9 @@ const ENERGY_LEAD = 1.3;
 // Phase terminale du planeur : distance a laquelle on passe en poursuite, et
 // gain reliant l'erreur de pointage a l'incidence commandee.
 const TERMINAL_RANGE = 45000;
+// Gain de poursuite du corps manoeuvrant. Plus faible que celui du planeur :
+// avec 9 degres d'incidence disponibles, un gain fort ne ferait que saturer.
+const MARV_GAIN = 3.5;
 const TERMINAL_GAIN = 6;
 
 export class FlightComputer {
@@ -543,6 +546,9 @@ export class FlightComputer {
     // --- Planeur hypersonique ---
     if (this.veh.glide) return this.guideGlide(t, nav, env, cmd, altEst, vRelEst, qDynEst);
 
+    // --- Corps de rentree manoeuvrant ---
+    if (this.veh.marv) return this.guideMarv(t, nav, cmd, altEst, vRelEst, qDynEst);
+
     // --- Corps de rentree balistique ---
     // Aucun controle : le nez se met dans le lit du vent, l'incidence est
     // nulle, la trajectoire ne depend plus que du coefficient balistique.
@@ -551,6 +557,115 @@ export class FlightComputer {
     cmd.aoa = 0;
     cmd.bank = 0;
     cmd.phase = this.phase;
+    return cmd;
+  }
+
+  /**
+   * Guidage d'un corps de rentree manoeuvrant.
+   *
+   * Le troisieme regime du simulateur, et le plus instructif des trois parce
+   * qu'il est intermediaire :
+   *
+   *   corps de rentree balistique  aucune correction — tout est scelle a l'extinction
+   *   corps manoeuvrant            quelques dizaines de secondes d'autorite, tout en bas
+   *   planeur hypersonique         des minutes de manoeuvre, jusqu'au but
+   *
+   * Deux bornes rendent cette autorite etroite, et ce sont elles qui font
+   * l'interet du cas :
+   *
+   *   - les gouvernes ne mordent que dans l'air dense. Tant que la pression
+   *     dynamique est faible, commander une incidence ne produit rien. Le
+   *     vehicule est donc balistique pendant l'essentiel du vol, y compris une
+   *     bonne partie de la rentree ;
+   *   - l'incidence reste petite. Un corps elance ne se met pas en travers a
+   *     Mach 8 sous forte pression dynamique.
+   *
+   * Consequence pedagogique : ce vecteur corrige une PARTIE de l'erreur, et
+   * seulement celle que sa centrale percoit tard. Une capacite de manoeuvre
+   * terminale ne rachete pas une mauvaise navigation — elle en rattrape la
+   * fraction qui tient dans quelques kilometres de deport lateral.
+   */
+  guideMarv(t, nav, cmd, altEst, vRelEst, qDynEst) {
+    const m = this.veh.marv;
+    const rEst = nav.r;
+    cmd.mode = 'marv';
+
+    // Hors du domaine ou les gouvernes agissent : pure balistique.
+    if (qDynEst < m.minQ) {
+      this.phase = altEst < 100000 ? PHASE.REENTRY : PHASE.COAST;
+      cmd.aoa = 0;
+      cmd.bank = 0;
+      cmd.phase = this.phase;
+      this.marvAuthority = 0;
+      return cmd;
+    }
+
+    this.phase = PHASE.TERMINAL;
+
+    // Poursuite : on pointe le vecteur vitesse sur le point vise. L'incidence
+    // fixe l'intensite de la correction, la gite en oriente le plan.
+    const up = V.normalize(rEst);
+    // On vise la CIBLE, et non le point vise.
+    //
+    // Le point vise porte un decalage volontaire, cale pendant la poussee pour
+    // pre-compenser ce qu'une chute non guidee perd au freinage. Un corps
+    // manoeuvrant, lui, corrige son impact reel : lui donner en plus la
+    // pre-compensation revient a la compter deux fois, et il se pose
+    // exactement a cote — de la valeur du decalage. Mesure a l'appui : point
+    // vise decale de 1525 m, ecart final 1453 m.
+    const aimEci = ecefToEci(this.targetEcef, t);
+    const vHat = V.normalize(vRelEst);
+
+    // Compensation de gravite.
+    //
+    // Pointer le vecteur vitesse SUR la cible fait tomber court, et
+    // systematiquement : pendant le temps de vol restant, la gravite continue
+    // de courber la trajectoire vers le bas. La poursuite pure ne le voit pas
+    // — elle annule une erreur de pointage, pas une erreur d'impact.
+    //
+    // On vise donc au-dessus du point vise, de la hauteur exacte que la
+    // gravite va reprendre : 1/2 g t^2, avec t le temps de vol restant estime.
+    // Mesure a l'appui, cette seule correction valait plus d'un kilometre
+    // d'ecart a 800 km de portee.
+    const dist = V.dist(aimEci, rEst);
+    const closing = Math.max(50, -V.dot(vRelEst, V.normalize(V.sub(rEst, aimEci))));
+    const tGo = dist / closing;
+    const gLocal = EARTH.mu / V.dot(rEst, rEst);
+    const releve = 0.5 * gLocal * tGo * tGo;
+    const aimLead = V.add(aimEci, V.scale(up, releve));
+
+    const los = V.normalize(V.sub(aimLead, rEst));
+    const corr = V.rejectFrom(V.sub(los, vHat), vHat);
+    const need = V.norm(corr);
+
+    const upPerp = V.normalize(V.rejectFrom(up, vHat));
+    const rightPerp = V.cross(vHat, upPerp);
+
+    // Bornage par la charge admissible AVANT le bornage par l'incidence
+    // maximale : sous forte pression dynamique c'est la cellule qui limite, pas
+    // la gouverne. On resout l'incidence qui produit exactement maxLoad.
+    const S = this.veh.rv.refArea;
+    const clMax = (m.maxLoad * this.veh.payloadMass * G0) / Math.max(1, qDynEst * S);
+    const sin2 = Math.max(-1, Math.min(1, clMax / m.liftSlope));
+    const aoaParCharge = 0.5 * Math.asin(sin2);
+
+    const plafond = Math.min(m.maxAoA, aoaParCharge);
+    const aoa = Math.max(0, Math.min(plafond, MARV_GAIN * need));
+    const bank = Math.atan2(V.dot(corr, rightPerp), V.dot(corr, upPerp));
+
+    // Autorite restante, exposee pour la telemetrie : c'est la grandeur qui
+    // dit si le vehicule peut encore quelque chose, ou s'il ne fait plus que
+    // tomber en pointant la cible.
+    this.marvAuthority = plafond > 0 ? Math.min(1, aoa / plafond) : 0;
+
+    cmd.aoa = aoa;
+    cmd.bank = bank;
+    cmd.phase = this.phase;
+    this.diagnostics = {
+      aoaDeg: aoa * RAD, bankDeg: bank * RAD, qDyn: qDynEst, altEst,
+      pointingErrDeg: need * RAD, plafondDeg: plafond * RAD,
+      limite: aoaParCharge < m.maxAoA ? 'charge' : 'gouverne',
+    };
     return cmd;
   }
 

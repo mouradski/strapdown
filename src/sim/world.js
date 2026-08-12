@@ -359,7 +359,7 @@ export class Simulation {
     const c = this.ctrl;
     c.burning = false;
     c.separated = true;
-    c.aeroMode = this.veh.glide ? 'glide' : 'rv';
+    c.aeroMode = this.veh.glide ? 'glide' : this.veh.marv ? 'marv' : 'rv';
     this.burnoutTime = this.t;
     this.burnoutSpeed = V.norm(this.vTrue);
     // On fige l'erreur de navigation A L'EXTINCTION. C'est elle qui determine

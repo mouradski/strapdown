@@ -73,6 +73,8 @@ export default {
     bal3Blurb: 'Three stages, re-entry body with a high ballistic coefficient. Long range.',
     glideName: 'Vehicle C — hypersonic glider',
     glideBlurb: 'Two booster stages, then a lifting body that pulls up and glides through the upper atmosphere instead of falling back.',
+    marvName: 'Vehicle D — manoeuvring re-entry body',
+    marvBlurb: 'One liquid stage, then a re-entry body with control fins. Ballistic almost all the way, it steers only in the last seconds — enough to correct a few kilometres, not a bad estimate.',
   },
 
   tabs: {

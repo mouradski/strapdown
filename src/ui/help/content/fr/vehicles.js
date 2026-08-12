@@ -62,4 +62,20 @@ export default {
       <p>L'extinction tombe bien plus tôt que sur un vecteur balistique, puisque la portée comptabilisée est l'arc balistique <em>plus</em> le plané. Et l'engin continue de manœuvrer : 248 s sous 30 km contre 17 pour le vecteur A, en pilotant jusqu'à l'impact. Il ne décale jamais son point visé pour compenser la traînée — correction nulle, mesurée — parce qu'il se contente de voler jusqu'où il croit la cible.</p>
       <p><b>D'où l'essentiel : son écart, c'est son erreur de navigation résiduelle.</b> Avec une centrale de classe tactique, 3,15 km d'écart pour 3,23 km d'erreur de navigation à l'impact. Le planeur corrige tout ce que sa centrale perçoit, et rien d'autre — ce qui en fait le vecteur sur lequel un recalage de terrain rapporte le plus.</p>`,
   },
+
+  'veh.marv': {
+    title: 'Vecteur D — corps de rentrée manœuvrant',
+    caption: 'La largeur des bandes est tout le propos.',
+    labels: {
+      ballistic: 'Balistique', ballisticNote: 'plus rien après l\'extinction — la trajectoire y est scellée',
+      marv: 'Manœuvrant', marvNote: 'quelques dizaines de secondes, dès que les gouvernes mordent',
+      glider: 'Planeur', gliderNote: 'des minutes de manœuvre, jusqu\'au but',
+      launch: 'lancement', impact: 'impact',
+      caption: 'Autorité de correction, sur un axe de temps commun.',
+    },
+    body: `<p>Un seul étage à ergols liquides, puis un corps de rentrée portant quatre gouvernes au culot. Il occupe la case vide entre les deux autres vecteurs, et c'est sa seule raison d'être.</p>
+      <p><b>Il est balistique pendant presque tout le vol.</b> Une gouverne a besoin de pression dynamique pour mordre : en dessous de 12 kPa environ, commander une incidence ne produit rigoureusement rien. L'engin n'acquiert donc son autorité que vers 40 km, quelque 25 à 30 secondes avant l'impact — et son incidence reste sous 9°, parce qu'un corps élancé ne se met pas en travers à Mach 8 sans casser.</p>
+      <p>Cette fenêtre étroite achète quelques kilomètres de déport latéral. De quoi corriger la dérive accumulée, <b>pas de quoi rattraper une mauvaise estimation</b>. Regardez le bilan de tir : son écart final suit presque exactement son erreur de navigation, là où celui d'un balistique est figé à l'extinction et celui d'un planeur tend vers zéro.</p>
+      <p>Une subtilité qui mérite d'être connue, parce qu'elle a coûté un kilomètre de précision à trouver. Un vecteur balistique vise un point <em>volontairement décalé</em>, pour pré-compenser ce qu'une chute non guidée perd au freinage. Un engin qui se guide ne doit surtout pas hériter de ce décalage : il corrige son impact réel, la pré-compensation serait donc comptée deux fois, et il se poserait à côté de la cible exactement de la valeur du décalage. Celui-ci vise la cible elle-même.</p>`,
+  },
 };

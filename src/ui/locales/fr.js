@@ -73,6 +73,8 @@ export default {
     bal3Blurb: 'Trois étages, corps de rentrée à fort coefficient balistique. Longue portée.',
     glideName: 'Vecteur C — planeur hypersonique',
     glideBlurb: 'Deux étages accélérateurs, puis un corps porteur qui ressource et plane dans la haute atmosphère au lieu de retomber.',
+    marvName: 'Vecteur D — corps de rentrée manœuvrant',
+    marvBlurb: 'Un seul étage à propergol liquide, puis un corps de rentrée à gouvernes. Balistique presque tout le vol, il ne pilote que dans les dernières secondes : de quoi corriger quelques kilomètres, pas de quoi rattraper une mauvaise estimation de position.',
   },
 
   tabs: {

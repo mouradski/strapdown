@@ -239,4 +239,39 @@ export function trajectoryGlide({ labels: L }) {
   `, { h: 304 });
 }
 
-export default { trajectoryBallistic, trajectoryRange, trajectoryGlide };
+/**
+ * Les trois regimes d'autorite de correction, sur un meme axe de temps.
+ *
+ * C'est le schema qui justifie l'existence du vecteur D : il occupe la case
+ * vide entre un corps de rentree qui ne corrige rien et un planeur qui corrige
+ * tout. La largeur des bandes EST le propos.
+ */
+export function authorityWindow({ labels: L }) {
+  const x0 = 108, x1 = 452, h = 22;
+  const lignes = [
+    { y: 44, deb: 1.0, cls: 'fig-danger', nom: L.ballistic, note: L.ballisticNote },
+    { y: 96, deb: 0.90, cls: 'fig-est', nom: L.marv, note: L.marvNote },
+    { y: 148, deb: 0.42, cls: 'fig-truth', nom: L.glider, note: L.gliderNote },
+  ];
+  const corps = lignes.map((l) => {
+    const xd = x0 + (x1 - x0) * l.deb;
+    const large = x1 - xd;
+    return `
+      ${rect(x0, l.y, x1 - x0, h, { cls: 'fig-band', rx: 3 })}
+      ${large > 1.5 ? rect(xd, l.y, large, h, { cls: `fig-fill ${l.cls}-box`, rx: 3 }) : ''}
+      ${large <= 1.5 ? line(x1 - 1, l.y, x1 - 1, l.y + h, { cls: l.cls }) : ''}
+      ${text(x0 - 8, l.y + 14, esc(l.nom), { anchor: 'end', cls: l.cls, size: 10.5 })}
+      ${text(x0 + 4, l.y + h + 13, esc(l.note), { cls: 'fig-dim', size: 9.5 })}`;
+  }).join('');
+
+  return svg(`
+    ${corps}
+    ${line(x0, 196, x1, 196, { cls: 'fig-axis' })}
+    ${text(x0, 210, esc(L.launch), { cls: 'fig-dim', size: 9.5 })}
+    ${text(x1, 210, esc(L.impact), { anchor: 'end', cls: 'fig-dim', size: 9.5 })}
+    ${text(240, 226, esc(L.caption), { anchor: 'middle', cls: 'fig-dim', size: 10 })}
+  `, { h: 236 });
+}
+
+export default {
+  authorityWindow, trajectoryBallistic, trajectoryRange, trajectoryGlide };

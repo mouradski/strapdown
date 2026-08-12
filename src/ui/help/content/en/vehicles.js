@@ -66,4 +66,20 @@ export default {
       <p>Cutoff comes far earlier than on a ballistic vehicle, since the range accounted for is the ballistic arc <em>plus</em> the glide. And the vehicle keeps manoeuvring: 248 s below 30 km against 17 for vehicle A, steering right up to impact. It never displaces its aim point to compensate for drag — zero correction, measured — because it simply flies to where it believes the target to be.</p>
       <p><b>Hence the essential point: its miss is its residual navigation error.</b> With a tactical-grade unit, 3.15 km of miss for 3.23 km of navigation error at impact. The glider corrects everything its inertial unit perceives, and only that — which makes it the vehicle on which a terrain fix pays best.</p>`,
   },
+
+  'veh.marv': {
+    title: 'Vehicle D — manoeuvring re-entry body',
+    caption: 'The width of each band is the whole point.',
+    labels: {
+      ballistic: 'Ballistic', ballisticNote: 'nothing after cut-off — the trajectory is sealed there',
+      marv: 'Manoeuvring', marvNote: 'a few tens of seconds, once the fins bite dense air',
+      glider: 'Glider', gliderNote: 'minutes of manoeuvre, all the way to the target',
+      launch: 'launch', impact: 'impact',
+      caption: 'Correction authority, on a common time axis.',
+    },
+    body: `<p>One liquid stage, then a re-entry body carrying four control fins at its base. It fills the gap between the other two vehicles, and that is its only purpose.</p>
+      <p><b>It is ballistic for almost the whole flight.</b> Fins need dynamic pressure to bite: below about 12 kPa, commanding an angle of attack produces nothing at all. So the vehicle only gains authority around 40 km, some 25 to 30 seconds before impact — and its angle of attack stays under 9°, because a slender body cannot turn broadside at Mach 8 without breaking.</p>
+      <p>That narrow window buys a few kilometres of cross-range. Enough to correct the accumulated drift, <b>not enough to rescue a bad estimate</b>. Watch the flight report: its final miss tracks its navigation error almost exactly, where a ballistic vehicle's miss is frozen at cut-off and a glider's approaches zero.</p>
+      <p>One subtlety worth knowing, because it cost a kilometre of accuracy to find. A ballistic vehicle aims at a <em>deliberately offset</em> point, to pre-compensate what an unguided fall loses to drag. A homing vehicle must not inherit that offset: it corrects its real impact, so the pre-compensation would be counted twice and it would land beside the target by exactly the offset. This one aims at the target itself.</p>`,
+  },
 };

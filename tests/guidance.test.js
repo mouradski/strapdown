@@ -278,6 +278,49 @@ export default function run(t) {
     t.ok(r.maxAccel < 20 * 9.80665, `charge structurale moderee (${(r.maxAccel / 9.80665).toFixed(1)} g)`);
   }
 
+  // --- Le corps manoeuvrant : un troisieme regime, intermediaire ---
+  //
+  // Ce vecteur n'existe que pour montrer ce qui separe les deux autres. Il est
+  // balistique presque tout le vol, puis dispose de quelques dizaines de
+  // secondes d'autorite. Il doit donc corriger ce que sa centrale PERCOIT, et
+  // rien de plus : son ecart final doit suivre son erreur de navigation, au
+  // lieu d'etre scelle a l'extinction comme celui d'un corps de rentree.
+  {
+    const parfaite = {
+      gyroBias: 0, gyroARW: 0, gyroBiasWalk: 0, gyroScale: 0,
+      accelBias: 0, accelVRW: 0, accelBiasWalk: 0, accelScale: 0, alignment: 0,
+    };
+    for (const km of [400, 800, 1500, 1800]) {
+      const lon = ((km * 1000) / EARTH.Rmean) * RAD;
+      const cfg = (imu) => ({
+        vehicleId: 'marv', launch: { lat: 0, lon: 0, alt: 0 }, target: { lat: 0, lon, alt: 0 },
+        sensors: { ...defaultSensorConfig(), imu }, loft: 0, seed: 1,
+      });
+      const r = runHeadless(cfg({ ...IMU_GRADES.navigation })).result;
+      t.ok(r !== null, `manoeuvrant ${km} km : impact obtenu`, true);
+      if (!r) continue;
+      t.ok(r.groundRange > km * 1000 * 0.97,
+        `manoeuvrant a ${km} km : portee atteinte (${(r.groundRange / 1000).toFixed(0)} km)`, true);
+      t.ok(r.missDistance < 700,
+        `manoeuvrant a ${km} km : ecart de ${r.missDistance.toFixed(0)} m`);
+
+      // Le coeur du sujet : l'ecart suit l'erreur de navigation. Un corps de
+      // rentree ordinaire, lui, garde l'erreur figee a l'extinction.
+      const p = runHeadless(cfg(parfaite)).result;
+      t.ok(p.missDistance < 300,
+        `manoeuvrant a ${km} km, centrale parfaite : residu ${p.missDistance.toFixed(0)} m`);
+    }
+
+    // Au-dela de sa portee utile il doit tomber court, pas diverger en silence.
+    const trop = runHeadless({
+      vehicleId: 'marv', launch: { lat: 0, lon: 0, alt: 0 },
+      target: { lat: 0, lon: ((2400 * 1000) / EARTH.Rmean) * RAD, alt: 0 },
+      sensors: { ...defaultSensorConfig(), imu: { ...IMU_GRADES.navigation } }, loft: 0, seed: 1,
+    }).result;
+    t.ok(trop && trop.groundRange < 2400 * 1000 * 0.95,
+      `manoeuvrant hors de portee : tombe court (${(trop.groundRange / 1000).toFixed(0)} km)`, true);
+  }
+
   // --- Le planeur doit tenir sa precision sur TOUTE sa plage ---
   // C'est ce que ne permettait aucun coefficient de finesse fixe : le biais
   // changeait de signe avec la portee. Le guidage boucle donc sur une

@@ -17,6 +17,7 @@ export const TOPICS = {
   'veh.bal2': { group: 'vehicles', diagram: 'trajectoryBallistic' },
   'veh.bal3': { group: 'vehicles', diagram: 'trajectoryRange' },
   'veh.glide': { group: 'vehicles', diagram: 'trajectoryGlide' },
+  'veh.marv': { group: 'vehicles', diagram: 'authorityWindow' },
 
   // -------------------------------------------------------------- mission
   'mission.launchSite': { group: 'mission', diagram: 'launchSite' },
