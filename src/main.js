@@ -409,6 +409,7 @@ const fmtSci = (v) => {
 // ---------------------------------------------------------------- vol
 
 function startFlight() {
+  burstToken++;
   state.seed = (Math.random() * 1e9) | 0;
   sim = new Simulation(buildConfig());
   overlay.clearTrails();
@@ -423,6 +424,7 @@ function startFlight() {
 }
 
 function resetFlight() {
+  burstToken++;
   sim = null;
   resultShown = false;
   overlay.clearTrails();
@@ -620,6 +622,7 @@ function updateLabels() {
 let lastFrame = performance.now();
 let resultShown = false;
 let lastTelemetry = 0;
+let burstToken = 0;
 
 function frame(now) {
   const dtWall = Math.min(0.1, (now - lastFrame) / 1000);
@@ -684,10 +687,23 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+// Delai laisse a l'animation de fonctionnement avant d'ouvrir le bilan.
+// Sans lui, la modale s'ouvrait a l'instant meme du declenchement et le
+// recouvrait entierement : l'effet se jouait derriere, et l'on ne voyait
+// jamais rien. Il ne s'applique que si la charge a effectivement fonctionne,
+// et seulement en vue rapprochee — depuis l'orbite il n'y a rien a regarder.
+const BURST_DELAY = 3200;
+
 function onImpact() {
   resultShown = true;
   $('btn-launch').disabled = false;
-  showResult(sim.result);
+  const r = sim.result;
+  const spectacle = r && r.burstMode && r.burstMode !== 'none' && view.mode !== 'orbite';
+  if (!spectacle) { showResult(r); return; }
+  // On retient le bilan, mais pas au prix d'un blocage : un nouveau tir ou une
+  // remise a zero pendant le delai annule l'ouverture differee.
+  const jeton = ++burstToken;
+  setTimeout(() => { if (jeton === burstToken && sim && sim.result === r) showResult(r); }, BURST_DELAY);
 }
 
 // ---------------------------------------------------------------- bilan

@@ -7,36 +7,52 @@
 // en altitude. C'est cette difference-la qui est le sujet, parce qu'elle
 // appartient au guidage.
 //
-// L'animation est volontairement breve et sobre. Une boule de feu spectaculaire
-// donnerait a l'outil un registre qui n'est pas le sien.
+// L'animation est une SEQUENCE, et c'est ce qui la rend lisible : un eclair
+// tres bref, un noyau qui s'epanouit en refroidissant, un front qui s'ecarte
+// et s'efface. Une boule unique qui grossit ne se lit pas comme un evenement ;
+// elle se lit comme un defaut d'affichage.
+//
+// Aucune de ces durees ni aucun de ces rayons n'a de signification physique.
+// Ils sont regles pour la lisibilite, a une distance de camera quelconque.
 
 import * as THREE from 'three';
 import { SCENE_SCALE } from './scale.js';
 
-const DUREE = 2.6; // [s] duree totale de l'effet
+const DUREE = 3.0; // [s] duree totale
 
-/**
- * Construit l'effet, masque. Il vit dans la scene et ne coute rien tant qu'il
- * n'est pas declenche.
- */
+/** Interpolation douce, pour eviter les demarrages et arrets brutaux. */
+const lissage = (x) => x * x * (3 - 2 * x);
+/** Fenetre : vaut 1 entre a et b, 0 en dehors, avec des bords adoucis. */
+function fenetre(u, a, b) {
+  if (u <= a || u >= b) return 0;
+  return lissage(Math.min(1, Math.min(u - a, b - u) / ((b - a) * 0.5)));
+}
+
 export function buildDetonation() {
   const group = new THREE.Group();
   group.visible = false;
   group.renderOrder = 14;
 
-  // Trois couches concentriques : le coeur, l'enveloppe, et l'onde qui s'ecarte.
-  // Le melange additif fait qu'elles s'additionnent au lieu de se masquer.
   const mat = (color, opacity) => new THREE.MeshBasicMaterial({
     color, transparent: true, opacity, blending: THREE.AdditiveBlending,
     depthWrite: false, side: THREE.DoubleSide,
   });
 
-  const coeur = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), mat(0xfff6e0, 0.85));
-  const enveloppe = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), mat(0xff8420, 0.55));
-  // L'onde est une COQUE et non une boule pleine : en mélange additif, une
-  // sphere pleine sature son centre en blanc et se lit comme un disque plat.
-  const onde = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), mat(0x8fb4e8, 0.16));
-  group.add(onde, enveloppe, coeur);
+  // L'eclair : tres bref, tres brillant, et plus large que le noyau. C'est lui
+  // qui donne l'impression d'un evenement instantane plutot que d'une boule
+  // qui apparait.
+  const eclair = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), mat(0xffffff, 0));
+  const coeur = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), mat(0xfff6e0, 0));
+  const enveloppe = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), mat(0xff8420, 0));
+
+  // Le front, en anneau PLAT et non en sphere : une sphere translucide qui
+  // grossit se confond avec le noyau, alors qu'un anneau qui s'ecarte se lit
+  // immediatement comme une propagation. Il est oriente perpendiculairement a
+  // la verticale locale.
+  const front = new THREE.Mesh(new THREE.RingGeometry(0.86, 1, 48), mat(0xa8c8ff, 0));
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), mat(0xffb060, 0));
+
+  group.add(front, halo, enveloppe, coeur, eclair);
 
   let age = -1;
   let echelle = 1;
@@ -45,41 +61,50 @@ export function buildDetonation() {
     group,
 
     /**
-     * Declenche l'effet a la position donnee.
-     * @param {THREE.Vector3} pos position en unites de scene
-     * @param {number} rayonRef rayon de reference [m] — l'effet s'y cale pour
-     *   rester lisible quel que soit le niveau de zoom
+     * @param {THREE.Vector3} pos position, en unites de scene
+     * @param {number} rayonRef rayon de reference [m], purement visuel
+     * @param {THREE.Vector3} [up] verticale locale, pour poser l'anneau a plat
      */
-    fire(pos, rayonRef) {
+    fire(pos, rayonRef, up = null) {
       group.position.copy(pos);
       echelle = Math.max(1, rayonRef) * SCENE_SCALE;
+      if (up) front.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), up.clone().normalize());
       age = 0;
       group.visible = true;
     },
 
     clear() { age = -1; group.visible = false; },
 
-    /** Avance l'animation. `dt` en secondes de temps reel. */
     update(dt) {
       if (age < 0) return;
       age += dt;
       if (age > DUREE) { this.clear(); return; }
       const u = age / DUREE;
 
-      // Croissance rapide puis saturation : la racine cubique reproduit
-      // grossierement l'allure d'une expansion qui ralentit.
+      // --- Eclair : les 4 premiers pour cent, puis plus rien ---
+      const fEclair = fenetre(u, 0, 0.04);
+      eclair.material.opacity = fEclair;
+      eclair.scale.setScalar(echelle * (0.5 + 1.4 * u * 12));
+
+      // --- Noyau : croissance rapide qui sature, extinction en un tiers ---
       const r = echelle * (0.18 + 0.95 * Math.cbrt(u));
       coeur.scale.setScalar(r * 0.30);
-      enveloppe.scale.setScalar(r * 0.62);
-      onde.scale.setScalar(r * (1 + 1.4 * u));
+      coeur.material.opacity = Math.max(0, 0.9 * (1 - u * 3.4));
 
-      // Le coeur s'eteint vite, l'enveloppe refroidit, l'onde s'efface en
-      // s'elargissant.
-      coeur.material.opacity = Math.max(0, 0.85 * (1 - u * 4));
-      enveloppe.material.opacity = Math.max(0, 0.55 * (1 - u * 1.7));
-      onde.material.opacity = Math.max(0, 0.16 * (1 - u) ** 1.5);
-      // Refroidissement : blanc chaud vers orange sombre.
-      enveloppe.material.color.setRGB(1, 0.6 - 0.35 * u, 0.24 - 0.2 * u);
+      // --- Enveloppe : plus lente, et elle REFROIDIT — c'est ce virage de
+      // couleur qui donne la duree, bien plus que la taille.
+      enveloppe.scale.setScalar(r * 0.62);
+      enveloppe.material.opacity = Math.max(0, 0.6 * (1 - u * 1.5));
+      enveloppe.material.color.setRGB(1, 0.62 - 0.42 * u, 0.26 - 0.22 * u);
+
+      // --- Halo residuel : prend le relais quand le noyau s'eteint ---
+      halo.scale.setScalar(r * 1.05);
+      halo.material.opacity = 0.14 * fenetre(u, 0.05, 1);
+
+      // --- Front : part vite, s'elargit et s'affine jusqu'a disparaitre ---
+      const rf = echelle * (0.3 + 4.2 * lissage(Math.min(1, u * 1.35)));
+      front.scale.setScalar(rf);
+      front.material.opacity = 0.5 * (1 - lissage(Math.min(1, u * 1.2))) ** 1.4;
     },
   };
 }

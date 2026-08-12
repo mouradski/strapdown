@@ -597,8 +597,11 @@ export class Overlay {
       // ete invisible. Le rapporter au champ garde l'effet lisible partout —
       // ce qui est legitime ici, puisqu'il ne represente aucune grandeur
       // physique : il marque un instant et un lieu, rien d'autre.
-      const distCam = this.view.camera.position.distanceTo(toScene(ecefB));
-      this.detonation.fire(toScene(ecefB), (distCam * 0.055) / SCENE_SCALE);
+      const posB = toScene(ecefB);
+      const distCam = this.view.camera.position.distanceTo(posB);
+      // Le globe est centre sur l'origine de la scene : la verticale locale est
+      // donc simplement la direction du point depuis le centre.
+      this.detonation.fire(posB, (distCam * 0.055) / SCENE_SCALE, posB.clone().normalize());
     }
     if (!sim.finished) this.burstShown = null;
 
