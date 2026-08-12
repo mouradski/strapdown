@@ -231,6 +231,8 @@ export default {
     missCaption: 'miss distance from aim point',
     rangeAimed: 'Range aimed / achieved',
     missNE: 'Miss north / east',
+    burst: 'Warhead functioned',
+    burstAt: '{h} m above ground',
     flightTime: 'Flight time',
     apogee: 'Apogee',
     burnout: 'Speed at cut-off',
@@ -290,5 +292,12 @@ export default {
     c1: 'Scroll: zoom. Drag: rotate. Click the globe: set target.',
     c2: '“Navigation error” is the truth, unknown to the vehicle. “Reported uncertainty” is what the Kalman filter believes about itself: compare the two.',
     c3: 'The <b>Ground</b> and <b>Chase</b> views show the vehicle itself, with its exhaust plume. From orbit it is a few metres against 6371 km — invisible, as it should be.',
+  },
+
+  fuze: {
+    title: 'Warhead fuzing',
+    contact: 'On contact',
+    height: 'Burst height',
+    hint: 'Where the warhead functions, not what it does — this simulator models no weapon effect. The setting matters because it belongs to the <b>guidance</b>: a vehicle descending on a slope still covers ground during the last metres of altitude. Aim at the ground while bursting in the air and you function short of the target, systematically. Every onboard impact prediction therefore stops at this height.',
   },
 };

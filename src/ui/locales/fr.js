@@ -231,6 +231,8 @@ export default {
     missCaption: 'écart au point visé',
     rangeAimed: 'Portée visée / atteinte',
     missNE: 'Écart nord / est',
+    burst: 'Fonctionnement de la charge',
+    burstAt: '{h} m au-dessus du sol',
     flightTime: 'Durée de vol',
     apogee: 'Apogée',
     burnout: 'Vitesse à l\'extinction',
@@ -290,5 +292,12 @@ export default {
     c1: 'Molette : zoom. Cliquer-glisser : rotation. Clic sur le globe : objectif.',
     c2: '« Erreur de navigation » est la vérité, inconnue du bord. « Incertitude annoncée » est ce que le filtre de Kalman croit de lui-même : comparez-les.',
     c3: 'Les vues <b>Sol</b> et <b>Poursuite</b> montrent l\'engin lui-même, avec son panache. Depuis l\'orbite il fait quelques mètres contre 6371 km — invisible, et c\'est bien normal.',
+  },
+
+  fuze: {
+    title: 'Fusée de la charge',
+    contact: 'Au contact',
+    height: 'Hauteur de déclenchement',
+    hint: 'Où la charge fonctionne, non ce qu\'elle produit — ce simulateur ne modélise aucun effet d\'arme. Le réglage compte parce qu\'il appartient au <b>guidage</b> : un engin qui descend en pente parcourt encore de la distance pendant les derniers mètres de hauteur. Viser le sol en déclenchant en l\'air, c\'est fonctionner avant la cible, systématiquement. Toutes les prédictions d\'impact embarquées s\'arrêtent donc à cette hauteur.',
   },
 };

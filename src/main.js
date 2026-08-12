@@ -39,6 +39,7 @@ const state = {
   loft: 0,
   sensors: defaultSensorConfig(),
   midcourse: { enabled: false, deltaV: 60 },
+  fuze: { enabled: false, height: 0 },
   seed: 1337,
   speed: 10,
   paused: false,
@@ -88,6 +89,7 @@ function buildConfig() {
     target: { ...state.target },
     sensors: JSON.parse(JSON.stringify(state.sensors)),
     midcourse: { ...state.midcourse },
+    fuze: { ...state.fuze },
     loft: state.loft,
     seed: state.seed,
     isLand: state.isLand,
@@ -254,6 +256,7 @@ function setupSensorPanel() {
   bindSwitch('alt-enabled', $('alt-detail'), state.sensors.altimeter);
   bindSwitch('terrain-enabled', $('terrain-detail'), state.sensors.terrain);
   bindSwitch('midcourse-enabled', $('midcourse-detail'), state.midcourse);
+  bindSwitch('fuze-enabled', $('fuze-detail'), state.fuze);
 
   $('gravity-model').addEventListener('change', (e) => {
     state.sensors.gravityModel = e.target.value;
@@ -343,6 +346,17 @@ function buildSensorControls() {
   );
 
   // --- Calculateur ---
+  const fuzeHost = $('fuze-height');
+  fuzeHost.innerHTML = '';
+  fuzeHost.append(W.slider({
+    label: t('fuze.height'), info: 'fuze.height', min: 0, max: 5000, step: 50, value: state.fuze.height,
+    // Zero n'est pas « pas de reglage » : c'est le declenchement au contact.
+    // Le libelle doit le dire, sinon un curseur a fond a gauche se lit comme
+    // une option desactivee.
+    format: (v) => (v < 25 ? t('fuze.contact') : `${v.toFixed(0)} m`),
+    onChange: (v) => { state.fuze.height = v < 25 ? 0 : v; refreshPreview(); },
+  }));
+
   const mcDetail = $('midcourse-detail');
   mcDetail.innerHTML = '';
   mcDetail.append(W.slider({
@@ -693,6 +707,8 @@ function showResult(r) {
     <table class="result-table">
       <tr><td>${t('result.rangeAimed')}</td><td>${W.distance(r.targetRange)} / ${W.distance(r.groundRange)}</td></tr>
       <tr><td>${t('result.missNE')}</td><td>${r.missNorth >= 0 ? '+' : ''}${r.missNorth.toFixed(0)} m &nbsp; ${r.missEast >= 0 ? '+' : ''}${r.missEast.toFixed(0)} m</td></tr>
+      ${r.burstMode && r.burstMode !== 'none' ? `<tr><td>${t('result.burst')}</td><td>${
+  r.burstAlt > 0 ? t('result.burstAt', { h: r.burstAlt.toFixed(0) }) : t('fuze.contact')}</td></tr>` : ''}
       <tr><td>${t('result.flightTime')}</td><td>${W.clock(r.flightTime)}</td></tr>
       <tr><td>${t('result.apogee')}</td><td>${W.distance(r.apogee)}</td></tr>
       <tr><td>${t('result.burnout')}</td><td>${t('result.burnoutAt', { speed: W.speed(r.burnoutSpeed), t: r.burnoutTime?.toFixed(0) })}</td></tr>
@@ -910,6 +926,7 @@ function setupLocaleSelect() {
 // et non au demarrage : un curseur deplace doit se voir sur le dessin.
 setHelpContext(() => ({
   sensors: state.sensors,
+  fuze: state.fuze,
   veh: VEHICLES[state.vehicleId],
   midcourse: state.midcourse,
   loft: state.loft,

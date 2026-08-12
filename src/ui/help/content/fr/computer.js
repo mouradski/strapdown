@@ -85,4 +85,23 @@ export default {
       <p>Faites le calcul dans l'autre sens et le réglage perd beaucoup de son mordant. Une erreur de navigation de deux kilomètres serait annulée par <b>4,4 m/s</b> — sous le minimum que le curseur autorise. Les 60 m/s par défaut déplacent l'impact de 27 km, bien au-delà de ce que produira jamais une centrale de classe navigation sur ce vol. La réserve n'est pratiquement jamais la contrainte qui mord.</p>
       <p>Ce qui mord, c'est la justesse de l'estimation avec laquelle on vise. Augmenter la réserve achète du déplacement, pas de la vérité — et un déplacement appliqué dans une direction légèrement fausse n'est qu'une erreur plus grande, livrée plus vite.</p>`,
   },
+
+  'fuze.mode': {
+    title: 'Fusée de la charge',
+    caption: 'La hauteur au-dessus du sol se paie en portée le long de la pente.',
+    labels: { target: 'cible', burst: 'déclenchement à', shortfall: 'fonctionne avant de', contact: 'au contact',
+      caption: 'Un engin en descente parcourt encore du sol pendant les derniers mètres de hauteur.' },
+    body: `<p>Ce simulateur ne modélise <b>aucun effet d'arme</b> — ni énergie, ni souffle, ni rayon, ni retombées. Il ne modélise que le <em>moment</em> et le <em>lieu</em> du fonctionnement. C'est délibéré : le sujet ici est le guidage, pas les effets.</p>
+      <p>Réglez la hauteur à <b>zéro et la charge fonctionne au contact</b> ; au-dessus de zéro, elle fonctionne en l'air à cette hauteur.</p>
+      <p>Le réglage mérite sa place parce qu'il appartient au <b>guidage</b>, pas à la charge. Un engin qui descend en pente parcourt encore de la distance pendant les derniers mètres de hauteur — le schéma est ce triangle. Viser le sol en fonctionnant en l'air, c'est fonctionner avant la cible, systématiquement et toujours du même côté.</p>
+      <p>Mesuré sur le vecteur A : le calculateur prévenu, l'écart reste autour de 340 m quel que soit le réglage. La hauteur cachée, le biais monte à <b>1 059 m à 2 km</b> et <b>2 120 m à 3 km</b>. Toutes les prédictions d'impact embarquées s'arrêtent donc à cette hauteur.</p>`,
+  },
+  'fuze.height': {
+    title: 'Hauteur de déclenchement',
+    caption: 'Le schéma suit votre réglage.',
+    labels: { target: 'cible', burst: 'déclenchement à', shortfall: 'fonctionne avant de', contact: 'au contact',
+      caption: 'Zéro signifie contact — c\'est un réglage, pas une absence de réglage.' },
+    body: `<p>Zéro n'est pas « pas de réglage » : c'est le <b>contact</b>. Au-dessus, la charge fonctionne en l'air à cette hauteur au-dessus du sol.</p>
+      <p>Regardez le segment rouge du schéma s'allonger à mesure que vous montez le curseur. Cette distance est ce que le guidage doit anticiper — et c'est la raison pour laquelle on communique la hauteur au calculateur au lieu de le laisser viser le sol.</p>`,
+  },
 };

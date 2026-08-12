@@ -61,6 +61,7 @@ export class Simulation {
       loft: cfg.loft ?? 0,
       gravityModel: cfg.sensors.gravityModel ?? 'j2',
       midcourse: cfg.midcourse ?? { enabled: false, deltaV: 0 },
+      burstAlt: cfg.fuze?.enabled ? Math.max(0, cfg.fuze.height ?? 0) : 0,
     });
     this.plan = this.computer.plan(0, r0);
 
@@ -122,6 +123,18 @@ export class Simulation {
     this.separationTime = null;
     this.predicted = null;
     this.lastPredictTime = -1e9;
+
+    // Hauteur de declenchement. Zero = au contact ; sinon la charge fonctionne
+    // en l'air, a cette hauteur au-dessus du sol. Ce n'est pas un detail
+    // cosmetique : sur une trajectoire inclinee, ces metres de hauteur se
+    // paient en metres de portee, et le calculateur doit en tenir compte.
+    this.burstAlt = cfg.fuze?.enabled ? Math.max(0, cfg.fuze.height ?? 0) : 0;
+    // Une fusee de proximite s'ARME : elle ne peut pas fonctionner tant que
+    // l'engin n'est pas monte franchement au-dessus de sa hauteur de
+    // declenchement. Sans cela elle se declencherait cinq secondes apres le
+    // decollage, l'engin etant alors precisement sous cette hauteur — c'est
+    // exactement ce qui est arrive au premier essai.
+    this.burstArmed = this.burstAlt <= 0;
 
     this.targetEcef = llaToEcef(cfg.target.lat, cfg.target.lon, cfg.target.alt ?? 0);
     this.log('events.solution');
@@ -286,7 +299,9 @@ export class Simulation {
 
     // 6) Detection d'impact avant de valider le pas.
     const altNext = ecefToLla(eciToEcef([yNext[0], yNext[1], yNext[2]], t + dt)).alt;
-    if (altNext <= 0 && t - this.launchTime > 5) {
+    if (!this.burstArmed && altNext > this.burstAlt * 3 + 1000) this.burstArmed = true;
+    const seuil = this.burstArmed ? this.burstAlt : 0;
+    if (altNext <= seuil && t - this.launchTime > 5) {
       this.resolveImpact(t, dt, deriv);
       return false;
     }
@@ -380,7 +395,7 @@ export class Simulation {
       const mid = 0.5 * (lo + hi);
       const ym = rk4(deriv, t, this.y, mid);
       const am = ecefToLla(eciToEcef([ym[0], ym[1], ym[2]], t + mid)).alt;
-      if (am > 0) lo = mid; else hi = mid;
+      if (am > (this.burstArmed ? this.burstAlt : 0)) lo = mid; else hi = mid;
     }
     const tImp = t + 0.5 * (lo + hi);
     this.y = rk4(deriv, t, this.y, 0.5 * (lo + hi));
@@ -397,6 +412,12 @@ export class Simulation {
     this.result = {
       impact: lla,
       target: tgt,
+      // « Impact » designe desormais le point de FONCTIONNEMENT, au sol ou en
+      // l'air. L'ecart, lui, se mesure toujours a l'horizontale : c'est la
+      // grandeur qui compare des tirs entre eux.
+      burstMode: this.cfg.fuze?.enabled
+        ? (this.burstAlt > 0 ? 'airburst' : 'contact') : 'none',
+      burstAlt: this.burstAlt,
       missDistance: miss.dist,
       missNorth: -miss.north,
       missEast: -miss.east,

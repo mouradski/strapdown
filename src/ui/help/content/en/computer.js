@@ -89,4 +89,23 @@ export default {
       <p>Run the arithmetic the other way and the setting loses much of its drama. A navigation error of two kilometres would be cancelled by <b>4.4 m/s</b> — below the minimum the slider allows. The default 60 m/s can shift the impact 27 km, far more than any error a navigation-grade unit will produce on this flight. The reserve is essentially never the binding constraint.</p>
       <p>What binds is the accuracy of the estimate the impulse is aimed with. Raising the reserve buys more displacement, not more truth — and displacement applied in a slightly wrong direction is simply a larger mistake, delivered faster.</p>`,
   },
+
+  'fuze.mode': {
+    title: 'Warhead fuzing',
+    caption: 'Height above ground costs range along the slope.',
+    labels: { target: 'target', burst: 'burst at', shortfall: 'functions short by', contact: 'on contact',
+      caption: 'A descending vehicle keeps covering ground during the last metres of altitude.' },
+    body: `<p>This simulator models <b>no weapon effect</b> — no energy, no blast, no radius, no fallout. It models only <em>when</em> and <em>where</em> the warhead functions. That is deliberate: the subject here is guidance, not effects.</p>
+      <p>Set the height to <b>zero and it functions on contact</b>; above zero, it functions in the air at that height.</p>
+      <p>The setting earns its place because it belongs to the <b>guidance</b>, not to the warhead. A vehicle descending on a slope keeps covering ground during the last metres of altitude — the diagram is that triangle. Aim at the ground while functioning in the air and you function short of the target, systematically and always on the same side.</p>
+      <p>Measured on Vehicle A: with the computer told the height, the miss stays near 340 m whatever the setting. With the height hidden from it, the bias grows to <b>1 059 m at 2 km</b> and <b>2 120 m at 3 km</b>. Every onboard impact prediction therefore stops at this height.</p>`,
+  },
+  'fuze.height': {
+    title: 'Burst height',
+    caption: 'The diagram follows your setting.',
+    labels: { target: 'target', burst: 'burst at', shortfall: 'functions short by', contact: 'on contact',
+      caption: 'Zero means contact — it is a setting, not an absence of one.' },
+    body: `<p>Zero is not "no setting": it is <b>contact</b>. Above zero, the warhead functions in the air at that height above the ground.</p>
+      <p>Watch the red segment in the diagram grow as you raise the slider. That distance is what the guidance must anticipate — and it is why the computer is told the height rather than left to aim at the ground.</p>`,
+  },
 };

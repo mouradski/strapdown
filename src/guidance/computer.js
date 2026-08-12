@@ -76,6 +76,14 @@ export class FlightComputer {
     // Limites de corridor. Desserrables depuis l'interface : c'est en les
     // relachant que l'on voit reapparaitre le plongeon qu'elles empechent.
     this.limits = { ...DEFAULT_LIMITS, ...(opts.limits ?? {}) };
+    // Hauteur de declenchement, si la charge fonctionne en l'air.
+    //
+    // Elle appartient au GUIDAGE, pas seulement a la charge. Un engin qui
+    // descend a 30 degres de pente et declenche a 500 m parcourt encore 866 m
+    // a l'horizontale avant d'atteindre le sol : viser le sol, c'est declencher
+    // avant la cible, systematiquement et du meme cote. Toutes les predictions
+    // d'impact s'arretent donc a cette hauteur.
+    this.burstAlt = opts.burstAlt ?? 0;
 
     this.targetEcef = llaToEcef(opts.targetLla.lat, opts.targetLla.lon, opts.targetLla.alt ?? 0);
     // Le point vise differe de la cible : il compense tout ce que la solution
@@ -365,6 +373,7 @@ export class FlightComputer {
       gravityModel: this.gravityModel,
       coarse: this.rangeError === null || Math.abs(this.rangeError) > 40000,
       maxTime: 3000,
+      stopAlt: this.burstAlt || null,
     });
     const reach = groundRange(
       this.launchLla.lat, this.launchLla.lon, imp.lla.lat, imp.lla.lon,
@@ -500,6 +509,7 @@ export class FlightComputer {
     const imp = predictImpact(rEst, this.solution.v1, t, {
       ballisticCoef: this.veh.rv.ballisticCoef,
       gravityModel: this.gravityModel,
+      stopAlt: this.burstAlt || null,
     });
     this.predictedImpact = imp;
     const dLat = this.targetLla.lat - imp.lla.lat;
@@ -613,7 +623,12 @@ export class FlightComputer {
     // pre-compensation revient a la compter deux fois, et il se pose
     // exactement a cote — de la valeur du decalage. Mesure a l'appui : point
     // vise decale de 1525 m, ecart final 1453 m.
-    const aimEci = ecefToEci(this.targetEcef, t);
+    // La cible, relevee a la hauteur de declenchement : c'est la qu'il faut
+    // arriver, pas au sol.
+    const aimEci = ecefToEci(
+      this.burstAlt > 0
+        ? llaToEcef(this.targetLla.lat, this.targetLla.lon, (this.targetLla.alt ?? 0) + this.burstAlt)
+        : this.targetEcef, t);
     const vHat = V.normalize(vRelEst);
 
     // Compensation de gravite.
@@ -893,7 +908,14 @@ export class FlightComputer {
     // de la portance, la gite en oriente le plan.
     if (distToTarget < TERMINAL_RANGE || tropLent) {
       this.phase = PHASE.TERMINAL;
-      const aimEci = ecefToEci(this.aimEcef, t);
+      // Point vise releve a la hauteur de declenchement, comme pour le corps
+      // manoeuvrant : le planeur arrive en pente faible, et quelques centaines
+      // de metres de hauteur s'y traduisent en bien plus de portee.
+      const aimEcef = this.burstAlt > 0
+        ? llaToEcef(ecefToLla(this.aimEcef).lat, ecefToLla(this.aimEcef).lon,
+          (ecefToLla(this.aimEcef).alt ?? 0) + this.burstAlt)
+        : this.aimEcef;
+      const aimEci = ecefToEci(aimEcef, t);
       const los = V.normalize(V.sub(aimEci, rEst));
       const vHat = V.normalize(vRelEst);
 

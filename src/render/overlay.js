@@ -12,6 +12,7 @@ import { atmosphere } from '../core/atmosphere.js';
 import { computeForces, airRelativeVelocity } from '../sim/dynamics.js';
 import { toScene, SCENE_SCALE } from './globe.js';
 import { buildMissile, buildPlume, buildSmoke, buildReentryGlow } from './missile.js';
+import { buildDetonation } from './detonation.js';
 
 const MAX_POINTS = 4200;
 
@@ -283,6 +284,12 @@ export class Overlay {
     this.ghost.visible = false;
     s.add(this.ghost);
 
+    this.detonation = buildDetonation();
+    s.add(this.detonation.group);
+    // Vol dont on a deja montre le fonctionnement : sans ce garde-fou, l'effet
+    // se rejouerait a chaque image une fois le vol termine.
+    this.burstShown = null;
+
     this._v = new THREE.Vector3();
     this._tmpv = new THREE.Vector3();
     this._occ = new THREE.Vector3();
@@ -532,6 +539,8 @@ export class Overlay {
   }
 
   clearTrails() {
+    this.detonation.clear();
+    this.burstShown = null;
     for (const line of [this.truthLine, this.estLine]) {
       line.geometry.setDrawRange(0, 0);
       line.userData.count = -1;
@@ -572,6 +581,27 @@ export class Overlay {
    * vers la scene, et l'on en fait directement la base du modele.
    */
   updateVehicle(sim, dtWall) {
+    this.detonation.update(dtWall);
+
+    // La charge fonctionne au terme du vol, si l'option est armee. On repere
+    // le tir par son instant d'impact : deux tirs successifs ne peuvent pas
+    // partager la meme valeur, et un vol rejoue ne redeclenche donc rien.
+    const r = sim.finished ? sim.result : null;
+    if (r && r.burstMode && r.burstMode !== 'none' && this.burstShown !== r.flightTime) {
+      this.burstShown = r.flightTime;
+      const ecefB = eciToEcef(sim.rTrue, sim.t);
+      // Rayon purement visuel, cale sur la DISTANCE DE LA CAMERA et non sur
+      // l'engin. En vue de poursuite la camera se tient a une centaine de
+      // metres : un effet dimensionne en metres l'engloutissait, et l'on ne
+      // voyait qu'un ecran uniforme. En vue orbitale, a l'inverse, il aurait
+      // ete invisible. Le rapporter au champ garde l'effet lisible partout —
+      // ce qui est legitime ici, puisqu'il ne represente aucune grandeur
+      // physique : il marque un instant et un lieu, rien d'autre.
+      const distCam = this.view.camera.position.distanceTo(toScene(ecefB));
+      this.detonation.fire(toScene(ecefB), (distCam * 0.055) / SCENE_SCALE);
+    }
+    if (!sim.finished) this.burstShown = null;
+
     if (!this.missile) return;
     const visible = sim.running || sim.finished;
     this.missile.group.visible = visible;

@@ -263,6 +263,45 @@ export function impulseBudget({ labels: L, midcourse }) {
   `, { h: 228 });
 }
 
+/**
+ * Geometrie du declenchement en altitude.
+ *
+ * Le propos tient en un triangle : sur une trajectoire inclinee, quitter le
+ * sol de h metres, c'est reculer le point de fonctionnement de h/tan(pente)
+ * metres. Viser le sol en declenchant en l'air fait donc fonctionner AVANT la
+ * cible, toujours du meme cote.
+ */
+export function burstGeometry({ labels: L, fuze }) {
+  const x0 = 60, x1 = 430, sol = 176;
+  const h = Math.max(0, Math.min(5000, fuze?.height ?? 1500));
+  // Pente de rentree typique, exageree pour rester lisible.
+  const pente = 34 * (Math.PI / 180);
+  // Hauteur a l'ecran : 3000 m occupent 96 px.
+  const hPix = Math.min(96, (h / 3000) * 96);
+  const recul = hPix / Math.tan(pente);
+  const xCible = 356;
+  const xBurst = xCible - recul;
+  const yBurst = sol - hPix;
+  const depart = { x: xBurst - 190, y: yBurst - 190 * Math.tan(pente) };
+
+  return svg(`
+    ${ground(x0, x1, sol)}
+    ${line(depart.x, depart.y, xCible, sol, { cls: 'fig-truth', dash: '5 4' })}
+    ${polyline([[depart.x, depart.y], [xBurst, yBurst]], { cls: 'fig-truth' })}
+    ${dot(xCible, sol, { r: 4, cls: 'fig-danger-fill' })}
+    ${text(xCible + 8, sol + 4, esc(L.target), { cls: 'fig-danger', size: 10.5 })}
+    ${hPix > 3 ? `
+      ${dot(xBurst, yBurst, { r: 4.5, cls: 'fig-est-fill' })}
+      ${line(xBurst, yBurst, xBurst, sol, { cls: 'fig-est', dash: '3 3' })}
+      ${text(xBurst - 6, yBurst - 8, `${esc(L.burst)} ${h.toFixed(0)} m`, { anchor: 'end', cls: 'fig-est', size: 10.5 })}
+      ${line(xBurst, sol + 16, xCible, sol + 16, { cls: 'fig-danger' })}
+      ${text((xBurst + xCible) / 2, sol + 30, `${esc(L.shortfall)} ${(recul / hPix * h).toFixed(0)} m`, { anchor: 'middle', cls: 'fig-danger', size: 10.5 })}`
+    : `${text(xCible - 10, sol - 10, esc(L.contact), { anchor: 'end', cls: 'fig-est', size: 10.5 })}`}
+    ${text(x0, 210, esc(L.caption), { cls: 'fig-dim', size: 10 })}
+  `, { h: 224 });
+}
+
 export default {
+  burstGeometry,
   guidanceLoop, oblateness, midcourseWindow, impulseBudget,
 };

@@ -62,6 +62,8 @@ export const TOPICS = {
   'computer.gravityModel': { group: 'computer', diagram: 'oblateness' },
   'computer.midcourse': { group: 'computer', diagram: 'midcourseWindow' },
   'computer.midcourseBudget': { group: 'computer', diagram: 'impulseBudget' },
+  'fuze.mode': { group: 'computer', diagram: 'burstGeometry' },
+  'fuze.height': { group: 'computer', diagram: 'burstGeometry', reactive: true },
 
   // -------------------------------------------------- telemetrie : capteurs
   'tlm.specificForce': { group: 'tlmSensors', diagram: 'specificForce' },
