@@ -29,6 +29,7 @@ import { solveIntercept, predictImpact } from './ballistic.js';
 import {
   bestGlideAoA, glideCoefficients, aoaForCL, aoaForFinesse, equilibriumGlideRange,
 } from '../sim/vehicle.js';
+import { corridorFloor, corridorPullUp, maxLiftAcceleration, DEFAULT_LIMITS } from './corridor.js';
 
 export const PHASE = {
   PRELAUNCH: 'prelaunch',
@@ -69,6 +70,9 @@ export class FlightComputer {
     this.loft = opts.loft ?? 0;
     this.gravityModel = opts.gravityModel ?? 'j2';
     this.midcourse = opts.midcourse ?? { enabled: false, deltaV: 0 };
+    // Limites de corridor. Desserrables depuis l'interface : c'est en les
+    // relachant que l'on voit reapparaitre le plongeon qu'elles empechent.
+    this.limits = { ...DEFAULT_LIMITS, ...(opts.limits ?? {}) };
 
     this.targetEcef = llaToEcef(opts.targetLla.lat, opts.targetLla.lon, opts.targetLla.alt ?? 0);
     // Le point vise differe de la cible : il compense tout ce que la solution
@@ -578,10 +582,37 @@ export class FlightComputer {
     const descending = V.dot(up, vRelEst) < 0;
     if (!this.pullUpDone && (!descending || altEst > g.pullUpAlt)) {
       this.phase = altEst > 100000 ? PHASE.COAST : PHASE.REENTRY;
-      cmd.aoa = 0;
-      cmd.bank = 0;
-      cmd.phase = this.phase;
-      return cmd;
+
+      // Descente vers la ressource. Elle se faisait a incidence NULLE, et
+      // c'etait le vrai defaut : le vehicule accumulait une vitesse de chute
+      // que sa portance maximale ne rattrapait plus ensuite. Mesure a l'appui,
+      // il saturait 34 s a 22 degres sans parvenir a redresser, et encaissait
+      // 12 g.
+      //
+      // La barriere de corridor s'applique donc DES LA DESCENTE : elle ne
+      // demande rien tant que la chute reste freinable, et commence a cabrer
+      // des qu'elle ne l'est plus. L'altitude de ressource devient une borne
+      // haute — on plane au plus tard a 62 km — au lieu d'un declencheur.
+      const vv = V.dot(up, vRelEst);
+      this.corridor = corridorFloor(speed, this.veh, this.limits, 0);
+      const rappel = corridorPullUp(altEst, vv, this.corridor, this.limits.maxLoad,
+        maxLiftAcceleration(altEst, speed, this.veh));
+      this.corridor.pullUpDeg = rappel * RAD;
+      this.corridor.marginM = altEst - this.corridor.alt;
+
+      if (rappel > 0) {
+        // La barriere mord : on entre en plane, meme au-dessus de l'altitude
+        // nominale de ressource.
+        this.pullUpDone = true;
+        this.pullUpSpeed = speed;
+        this.pullUpAlt = altEst;
+        this.pullUpLla = lla;
+      } else {
+        cmd.aoa = 0;
+        cmd.bank = 0;
+        cmd.phase = this.phase;
+        return cmd;
+      }
     }
     if (!this.pullUpDone) {
       this.pullUpDone = true;
@@ -691,6 +722,23 @@ export class FlightComputer {
     // Amortissement de la phugoide : sans ce terme le planeur rebondirait sur
     // l'atmosphere au lieu de s'y poser.
     aoa -= 1.2e-4 * vVert;
+
+    // --- Plancher de corridor ---
+    //
+    // Le vol plane d'equilibre ne connait ni le flux thermique ni la charge :
+    // il descend jusqu'a trouver la densite qui porte, et sur une rentree
+    // rapide cela l'emmene beaucoup trop bas. On lui interdit donc le bas du
+    // domaine, en cabrant a l'approche du plancher.
+    //
+    // Le supplement s'AJOUTE a l'incidence nominale au lieu de la remplacer :
+    // hors du corridor il vaut zero et la boucle de finesse garde la main
+    // entiere. On ne paie la contrainte que la ou elle mord.
+    this.corridor = corridorFloor(speed, this.veh, this.limits, aoa);
+    const rappel = corridorPullUp(altEst, vVert, this.corridor, this.limits.maxLoad,
+        maxLiftAcceleration(altEst, speed, this.veh));
+    aoa += rappel;
+    this.corridor.pullUpDeg = rappel * RAD;
+    this.corridor.marginM = altEst - this.corridor.alt;
 
     const reachable = equilibriumGlideRange(speed, g.minSpeed, this.glideFinesse);
     aoa = Math.max(2 * DEG, Math.min(g.maxAoA, aoa));
