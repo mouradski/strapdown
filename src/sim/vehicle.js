@@ -104,8 +104,19 @@ export const VEHICLES = {
       // l'altitude jusqu'a s'annuler a `ascentTargetAlt`. Sans cela le
       // planeur monterait comme un vecteur balistique et redescendrait bien
       // trop raide pour pouvoir se mettre en plane.
+      //
+      // 18 km, et non 72 : c'est tout l'ecart entre un balistique qui plane un
+      // peu et un vrai vol plane propulse. A 72 km la pente ne s'annulait qu'en
+      // haute atmosphere, l'engin coupait a 118 km sous 11 degres et culminait
+      // a 157 km — donc rentrait a 1189 m/s de chute, que sa portance ne
+      // rattrapait plus, d'ou les 12 g encaisses au premier plongeon.
+      //
+      // En aplatissant des 18 km, l'apogee tombe a 72 km et la chute a 491 m/s.
+      // Valeur choisie par balayage : plus bas, la portee longue devient
+      // fragile ; plus haut, l'entree redevient raide sans que la precision y
+      // gagne.
       ascentGammaMax: 72,
-      ascentTargetAlt: 72000,
+      ascentTargetAlt: 18000,
     },
     usefulRange: 9500e3,
     // Virage gravitationnel tres court : le pilotage de pente prend la main

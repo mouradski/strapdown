@@ -755,13 +755,18 @@ export class FlightComputer {
     // Cette borne ne s'applique PAS a l'interieur de la portee terminale : sur
     // les derniers kilometres, mieux vaut piloter avec un modele aerodynamique
     // approximatif que ne plus piloter du tout.
-    if (speed < g.minSpeed && distToTarget > TERMINAL_RANGE) {
-      this.phase = PHASE.TERMINAL;
-      cmd.aoa = 0;
-      cmd.bank = 0;
-      cmd.phase = this.phase;
-      return cmd;
-    }
+    // Sous la vitesse plancher, le modele newtonien cesse d'etre valide. On
+    // cessait alors de piloter — et c'etait un trou : quand le planeur ralentit
+    // encore loin du but, il tombait balistiquement sur les dernieres dizaines
+    // de kilometres, et l'ecart final n'etait plus qu'une affaire de chance.
+    // C'est ce trou qui produisait les points noirs isoles du balayage : selon
+    // la portee, l'engin arrivait a la bonne place ou a trois kilometres.
+    //
+    // On applique donc ici le raisonnement deja tenu pour la phase terminale :
+    // mieux vaut piloter avec un modele aerodynamique approximatif que ne plus
+    // piloter du tout. La poursuite prend la main des que l'une OU l'autre
+    // condition est remplie.
+    const tropLent = speed < g.minSpeed;
 
     // --- Phase terminale : poursuite ---
     //
@@ -771,7 +776,7 @@ export class FlightComputer {
     // rien. On le pilote donc jusqu'au bout, en pointant le vecteur vitesse sur
     // l'objectif — c'est du virage par la gite : l'incidence fixe l'intensite
     // de la portance, la gite en oriente le plan.
-    if (distToTarget < TERMINAL_RANGE) {
+    if (distToTarget < TERMINAL_RANGE || tropLent) {
       this.phase = PHASE.TERMINAL;
       const aimEci = ecefToEci(this.aimEcef, t);
       const los = V.normalize(V.sub(aimEci, rEst));
